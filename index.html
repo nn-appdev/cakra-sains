@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CAKRA-SAINS VR - Ekosistem Pembelajaran Imersif</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { eco: { 400: '#34d399', 500: '#10b981', 600: '#059669' } }
+                }
+            }
+        }
+    </script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Three.js & VR Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/effects/StereoEffect.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DeviceOrientationControls.js"></script>
+
+    <style>
+        body { 
+            background: #020617; color: #f8fafc; overflow: hidden; margin: 0; padding: 0; touch-action: none;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        /* --- STYLING LENSA CARDBOARD --- */
+        .vr-lens-container {
+            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: #000; padding: 10px;
+        }
+        .vr-lens-mask {
+            width: 100%; height: 100%; border-radius: 35%; overflow: hidden; position: relative; background: #111; box-shadow: inset 0 0 50px rgba(0,0,0,1); transform: scale(1.05);
+        }
+        .vr-video { width: 100%; height: 100%; object-fit: cover; }
+        .normal-video { width: 100%; height: 100%; object-fit: contain; }
+
+        /* Latar Belakang Animasi Landing Page */
+        .neon-bg {
+            position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #064e3b 0%, #020617 70%);
+        }
+        .blob {
+            position: absolute; filter: blur(80px); opacity: 0.4; animation: float 10s infinite ease-in-out alternate;
+        }
+        
+        /* Ikon Melayang (Xray Glossy Effect) */
+        .float-icon {
+            position: absolute; opacity: 0.15; filter: drop-shadow(0 0 12px rgba(52,211,153,0.9));
+            animation: floatSlow 15s infinite linear alternate;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) scale(1); }
+            100% { transform: translateY(-20px) scale(1.1); }
+        }
+        @keyframes floatSlow {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(-40px) rotate(15deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- ICONS (Standar UI) ---
+        const IconFilm = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>;
+        const IconVR = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.52 7.15L15 4V3a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v18a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1l6.52-3.15a1 1 0 0 0 .48-.9V8.05a1 1 0 0 0-.48-.9z"></path><path d="M15 12v.01"></path><path d="M15 8v.01"></path><path d="M15 16v.01"></path></svg>;
+        const IconTrash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        const IconVolumeUp = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>;
+        const IconVolumeOff = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="1" x2="1" y2="23"></line></svg>;
+        const IconEyeOpen = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
+        const IconEyeClosed = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
+        
+        // --- ICONS EKOSISTEM ---
+        const EcoEarth = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
+        const EcoLeaf = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><line x1="2" y1="22" x2="11" y2="20"/></svg>;
+        const EcoSunCloud = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="20" y1="5" x2="22" y2="6"/></svg>;
+        const EcoBird = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/><path d="M9 10h.01M15 10h.01"/></svg>;
+        const EcoFox = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="12 22 2 10 12 2 22 10 12 22"/><path d="M2 10l10 5 10-5"/></svg>;
+
+        // --- KONFIGURASI SUPABASE ---
+        const SUPABASE_URL = "https://xltrmoeabasrconlhijv.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_kzMgSC5JniUeJZGBGW1RIA_7aKyk0vh";
+        const STORAGE_BUCKET = "videos";
+
+        const supabaseApi = async (endpoint, options = {}) => {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1${endpoint}`, {
+                ...options,
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation',
+                    ...(options.headers || {})
+                }
+            });
+            if (!res.ok) throw new Error(`API Error: ${res.status}`);
+            return res.status === 204 ? null : await res.json();
+        };
+
+        function CakraSainsApp() {
+            const [currentView, setCurrentView] = useState('landing');
+            const [vrMode, setVrMode] = useState(false);
+            const [isMuted, setIsMuted] = useState(true);
+            const [broadcastData, setBroadcastData] = useState(null);
+
+            useEffect(() => {
+                const handleStorageChange = (e) => {
+                    if (e.key === 'cakra_broadcast' && e.newValue) {
+                        setBroadcastData(JSON.parse(e.newValue));
+                    }
+                };
+                window.addEventListener('storage', handleStorageChange);
+                return () => window.removeEventListener('storage', handleStorageChange);
+            }, []);
+
+            const simulateBroadcastToStudent = (media) => {
+                const payload = { type: 'video', data: media, timestamp: Date.now() };
+                setBroadcastData(payload);
+                localStorage.setItem('cakra_broadcast', JSON.stringify(payload));
+                window.dispatchEvent(new StorageEvent('storage', { key: 'cakra_broadcast', newValue: JSON.stringify(payload) }));
+            };
+
+            const handleEnterStudent = () => {
+                // Meminta Izin Gyroscope wajib melalui interaksi pengguna langsung (untuk iOS/Android)
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission().catch(console.error);
+                }
+                setVrMode(true);
+                setCurrentView('player');
+            };
+
+            return (
+                <div className="w-full h-screen text-white font-sans overflow-hidden selection:bg-cyan-500/30 bg-[#020617]">
+                    {currentView === 'landing' && <LandingScreen onEnterStudent={handleEnterStudent} onEnterTeacher={() => setCurrentView('teacher_auth')} />}
+                    {currentView === 'player' && <MasterPlayer vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={() => { setCurrentView('landing'); setBroadcastData(null); localStorage.removeItem('cakra_broadcast'); }} broadcastData={broadcastData} />}
+                    {currentView === 'teacher_auth' && <TeacherAuth onAuthenticated={() => setCurrentView('teacher')} onCancel={() => setCurrentView('landing')} />}
+                    {currentView === 'teacher' && <TeacherConsole onLogout={() => setCurrentView('landing')} onBroadcast={simulateBroadcastToStudent} broadcastData={broadcastData} />}
+                </div>
+            );
+        }
+
+        // --- LANDING SCREEN ---
+        function LandingScreen({ onEnterStudent, onEnterTeacher }) {
+            return (
+                <div className="relative w-full h-full flex flex-col items-center justify-center p-6">
+                    <div className="neon-bg">
+                        <div className="blob w-[30rem] h-[30rem] bg-eco-500 rounded-full left-[-10rem] top-[-10rem]"></div>
+                        <div className="blob w-[40rem] h-[40rem] bg-cyan-600 rounded-full right-[-15rem] bottom-[-10rem]" style={{animationDelay: '2s'}}></div>
+                        
+                        <div className="float-icon w-32 h-32 top-10 left-10 text-cyan-200"><EcoEarth /></div>
+                        <div className="float-icon w-24 h-24 top-40 right-20 text-eco-300" style={{animationDelay: '1s'}}><EcoLeaf /></div>
+                        <div className="float-icon w-28 h-28 bottom-32 left-32 text-blue-300" style={{animationDelay: '2s'}}><EcoSunCloud /></div>
+                        <div className="float-icon w-24 h-24 bottom-10 right-1/4 text-yellow-200" style={{animationDelay: '3s'}}><EcoFox /></div>
+                        <div className="float-icon w-16 h-16 top-1/2 left-1/4 text-pink-300" style={{animationDelay: '4s'}}><EcoBird /></div>
+                    </div>
+
+                    <div className="z-10 text-center max-w-4xl glass-panel p-10 md:p-16 rounded-[2.5rem]">
+                        <div className="inline-block px-5 py-2 rounded-full bg-eco-500/10 text-eco-400 font-bold text-xs tracking-widest uppercase mb-6 border border-eco-500/30">
+                            Harmoni Kehidupan dalam Ekosistem
+                        </div>
+                        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-br from-white via-cyan-100 to-eco-400">
+                            CAKRA-SAINS VR
+                        </h1>
+                        <p className="text-lg md:text-xl text-slate-300 mb-12 font-medium">
+                            Platform Imersif Pembelajaran Ekosistem 4D
+                        </p>
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+                            <button onClick={onEnterStudent} className="px-8 py-4 bg-gradient-to-r from-eco-600 to-cyan-600 hover:opacity-90 text-white rounded-2xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(16,185,129,0.5)] flex items-center justify-center gap-3 w-full sm:w-auto">
+                                <IconVR /> PORTAL SISWA
+                            </button>
+                            <button onClick={onEnterTeacher} className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/20 text-white rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-3 w-full sm:w-auto shadow-lg">
+                                👨‍🏫 KONSOL GURU
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- TEACHER AUTHENTICATION (Dengan Ikon Mata) ---
+        function TeacherAuth({ onAuthenticated, onCancel }) {
+            const [password, setPassword] = useState('');
+            const [showPassword, setShowPassword] = useState(false);
+            const [error, setError] = useState('');
+            
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (password === 'cakra-sains') onAuthenticated();
+                else { setError('Password salah.'); setPassword(''); }
+            };
+            
+            return (
+                <div className="relative w-full h-full flex flex-col items-center justify-center p-6 bg-slate-950">
+                    <button onClick={onCancel} className="absolute top-6 right-6 px-4 py-2 glass-panel rounded-full text-sm hover:bg-white/10">Batal</button>
+                    <div className="glass-panel p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl backdrop-blur-md">
+                        <div className="w-16 h-16 bg-eco-500/20 text-eco-400 rounded-full flex items-center justify-center mx-auto mb-6"><IconFilm /></div>
+                        <h2 className="text-2xl font-bold mb-6 text-white">Akses Guru</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="relative mb-4">
+                                <input 
+                                    type={showPassword ? "text" : "password"} 
+                                    value={password} 
+                                    onChange={(e) => { setPassword(e.target.value); setError(''); }} 
+                                    placeholder="Masukkan Sandi" 
+                                    className="w-full bg-black/40 border border-white/20 rounded-xl px-4 py-3 pr-12 text-center outline-none text-white focus:border-eco-400 transition-colors" 
+                                    autoFocus 
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-white transition-colors"
+                                >
+                                    {showPassword ? <IconEyeClosed /> : <IconEyeOpen />}
+                                </button>
+                                {error && <p className="text-red-400 text-xs mt-2 text-left absolute">{error}</p>}
+                            </div>
+                            <button type="submit" className="w-full py-3 mt-4 bg-gradient-to-r from-eco-600 to-cyan-600 hover:opacity-90 text-white font-bold rounded-xl transition-colors shadow-lg">Masuk</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- TEACHER CONSOLE ---
+        function TeacherConsole({ onLogout, onBroadcast, broadcastData }) {
+            const [mediaList, setMediaList] = useState([]);
+            const [isUploading, setIsUploading] = useState(false);
+            const [previewMedia, setPreviewMedia] = useState(null);
+            const [previewVrMode, setPreviewVrMode] = useState(false);
+            const [previewIsMuted, setPreviewIsMuted] = useState(true);
+
+            const fileInputRef = useRef(null);
+            const liveMediaId = broadcastData?.data?.id;
+
+            const fetchMedia = async () => {
+                try {
+                    const data = await supabaseApi('/films?select=*&order=id.desc');
+                    if (data) setMediaList(data);
+                } catch (err) { console.warn("Koneksi Supabase gagal."); }
+            };
+
+            useEffect(() => { fetchMedia(); }, []);
+
+            const handleFileChange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsUploading(true);
+                try {
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `vid_${Date.now()}.${fileExt}`;
+                    const storageUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${fileName}`;
+                    
+                    const uploadRes = await fetch(storageUrl, {
+                        method: 'POST',
+                        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': file.type },
+                        body: file
+                    });
+                    if (!uploadRes.ok) throw new Error("Gagal unggah.");
+                    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${fileName}`;
+                    const newRecord = { title: file.name.replace(`.${fileExt}`, ''), format: 'Video', is_video: true, url: publicUrl };
+
+                    await supabaseApi('/films', { method: 'POST', body: JSON.stringify(newRecord) });
+                    fetchMedia();
+                } catch (err) { alert("Upload gagal."); } 
+                finally { setIsUploading(false); }
+            };
+
+            const handleDelete = async (id) => {
+                if(!window.confirm("Hapus film ini secara permanen?")) return;
+                try { await supabaseApi(`/films?id=eq.${id}`, { method: 'DELETE' }); fetchMedia(); } 
+                catch(err) { alert("Gagal menghapus."); }
+            };
+
+            return (
+                <div className="w-full h-full flex flex-col bg-[#020617]">
+                    <div className="glass-panel p-5 flex justify-between items-center z-10 border-b-0 rounded-b-2xl mx-4 mt-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-eco-500 to-cyan-600 rounded-full flex items-center justify-center text-white shadow-[0_0_10px_rgba(16,185,129,0.4)]">
+                                <IconFilm />
+                            </div>
+                            <h2 className="font-bold text-lg tracking-wide text-white">Konsol Guru</h2>
+                        </div>
+                        <button onClick={onLogout} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg text-sm hover:bg-red-500/20 font-semibold border border-red-500/30">Tutup Kendali</button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                        <div className="glass-panel rounded-3xl p-6 md:p-8">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 border-b border-white/10 pb-6">
+                                <div>
+                                    <h3 className="text-3xl font-bold text-white mb-1">Pustaka Media</h3>
+                                    <p className="text-slate-400 text-sm font-medium">Klik "Siarkan" untuk memutar otomatis di layar siswa.</p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button onClick={fetchMedia} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-semibold">🔄 Refresh</button>
+                                    <button onClick={() => fileInputRef.current.click()} disabled={isUploading} className="px-5 py-2.5 bg-white text-black hover:bg-slate-200 rounded-xl font-bold shadow-lg">
+                                        {isUploading ? 'Memproses...' : '+ Tambah Film'}
+                                    </button>
+                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="video/mp4,video/webm" className="hidden" />
+                                </div>
+                            </div>
+
+                            {mediaList.length === 0 ? (
+                                <div className="text-center py-20 border border-dashed border-white/20 rounded-3xl text-slate-500 font-medium">
+                                    Belum ada film di server. Silakan unggah materi pembelajaran.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {mediaList.map((media) => {
+                                        const isLive = liveMediaId === media.id;
+                                        return (
+                                            <div key={media.id} className={`glass-panel rounded-2xl overflow-hidden flex flex-col group transition-all ${isLive ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/10 hover:border-eco-500/50'}`}>
+                                                <div className="h-40 bg-black/60 relative flex items-center justify-center overflow-hidden border-b border-white/5">
+                                                    <IconFilm />
+                                                    <button onClick={() => handleDelete(media.id)} className="absolute top-3 right-3 p-2 bg-black/80 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900 hover:text-white border border-red-500/30">
+                                                        <IconTrash />
+                                                    </button>
+                                                    {isLive && (
+                                                        <div className="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1.5 animate-pulse">
+                                                            <div className="w-1.5 h-1.5 bg-white rounded-full"></div> LIVE
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="p-5 flex-1 flex flex-col bg-black/20">
+                                                    <h4 className="font-bold text-lg mb-4 line-clamp-2 text-white">{media.title}</h4>
+                                                    <div className="flex gap-2 mt-auto">
+                                                        <button onClick={() => setPreviewMedia(media)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold border border-white/10 transition-colors">
+                                                            Pratinjau
+                                                        </button>
+                                                        <button onClick={() => onBroadcast(isLive ? null : media)} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all border ${isLive ? 'bg-red-600/20 text-red-400 border-red-500/50' : 'bg-gradient-to-r from-eco-600 to-cyan-600 text-white border-transparent shadow-lg'}`}>
+                                                            {isLive ? 'Hentikan Siaran' : '▶ Siarkan ke Siswa'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* MODAL PRATINJAU GURU */}
+                    {previewMedia && (
+                        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+                            <div className="flex-1 relative">
+                                <HTMLVideoVRPlayer 
+                                    vrMode={previewVrMode} 
+                                    setVrMode={setPreviewVrMode} 
+                                    isMuted={previewIsMuted} 
+                                    setIsMuted={setPreviewIsMuted} 
+                                    onExit={() => {
+                                        setPreviewMedia(null);
+                                        setPreviewVrMode(false);
+                                        setPreviewIsMuted(true);
+                                    }} 
+                                    videoUrl={previewMedia.url} 
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- MASTER PLAYER (Transisi Mulus) ---
+        function MasterPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, broadcastData }) {
+            const hasVideo = broadcastData?.type === 'video' && broadcastData?.data?.url;
+
+            return (
+                <div className="relative w-full h-full">
+                    {hasVideo ? (
+                        <HTMLVideoVRPlayer vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={onExit} videoUrl={broadcastData.data.url} />
+                    ) : (
+                        <Ecosystem3DRoom vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={onExit} />
+                    )}
+                </div>
+            );
+        }
+
+        // --- 1. HTML5 VR PLAYER ---
+        function HTMLVideoVRPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, videoUrl }) {
+            const leftVideoRef = useRef(null);
+            const rightVideoRef = useRef(null);
+
+            useEffect(() => {
+                if (leftVideoRef.current) {
+                    leftVideoRef.current.muted = isMuted;
+                    if (rightVideoRef.current) rightVideoRef.current.muted = true; // Kanan selalu bisu
+                    
+                    const playVideos = async () => {
+                        try {
+                            const p = [leftVideoRef.current.play()];
+                            if(rightVideoRef.current) p.push(rightVideoRef.current.play());
+                            await Promise.all(p);
+                        } catch (e) { console.log("Autoplay ditolak. Butuh interaksi."); }
+                    };
+                    playVideos();
+                }
+            }, [videoUrl, isMuted, vrMode]);
+
+            const syncVideos = () => {
+                if (leftVideoRef.current && rightVideoRef.current) {
+                    if (Math.abs(leftVideoRef.current.currentTime - rightVideoRef.current.currentTime) > 0.1) {
+                        rightVideoRef.current.currentTime = leftVideoRef.current.currentTime;
+                    }
+                }
+            };
+
+            return (
+                <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+                    <div className="absolute inset-0 flex w-full h-full">
+                        <div className={`vr-lens-container ${vrMode ? 'w-1/2 border-r-2 border-slate-900/50' : 'w-full'}`}>
+                            <div className={vrMode ? 'vr-lens-mask' : 'w-full h-full relative'}>
+                                <video ref={leftVideoRef} src={videoUrl} className={vrMode ? 'vr-video' : 'normal-video'} onTimeUpdate={syncVideos} playsInline loop />
+                            </div>
+                        </div>
+                        {vrMode && (
+                            <div className="vr-lens-container w-1/2 border-l-2 border-slate-900/50">
+                                <div className="vr-lens-mask">
+                                    <video ref={rightVideoRef} src={videoUrl} className="vr-video" playsInline muted loop />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} />
+                </div>
+            );
+        }
+
+        // --- 2. RUANG DEMO EKOSISTEM 360 (Three.js WebGL Anti Green-Screen, 360 Penuh) ---
+        function Ecosystem3DRoom({ vrMode, setVrMode, isMuted, setIsMuted, onExit }) {
+            const containerRef = useRef(null);
+
+            useEffect(() => {
+                if (!containerRef.current || !window.THREE) return;
+                const THREE = window.THREE;
+                const container = containerRef.current;
+                
+                const scene = new THREE.Scene();
+                // Latar belakang diatur gelap
+                scene.background = new THREE.Color(0x020617);
+                scene.fog = new THREE.FogExp2(0x020617, 0.015);
+
+                // Setup Camera: Menggunakan aspek rasio dinamis untuk cegah render blank
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 0, 0);
+
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cegah crash resolusi layar ekstrim
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                container.appendChild(renderer.domElement);
+
+                let stereoEffect = null;
+                if (vrMode && THREE.StereoEffect) {
+                    stereoEffect = new THREE.StereoEffect(renderer);
+                    stereoEffect.setSize(window.innerWidth, window.innerHeight);
+                }
+
+                // --- MEMBANGUN EKOSISTEM 360 DERAJAT ---
+                
+                // 1. GridHelper untuk kedalaman spasial bawah (Lantai)
+                const gridHelper = new THREE.GridHelper(300, 60, 0x10b981, 0x064e3b);
+                gridHelper.position.y = -15;
+                scene.add(gridHelper);
+
+                // 2. Starfield (Partikel Bintang) agar rotasi 360 derajat terasa nyata (Kedalaman visual)
+                const starGeo = new THREE.BufferGeometry();
+                const starVerts = [];
+                for(let i=0; i<1500; i++) {
+                    starVerts.push((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*300);
+                }
+                starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+                const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0x34d399, size: 0.8, transparent: true, opacity: 0.6}));
+                scene.add(stars);
+
+                // 3. Ikon Ekosistem tersebar 360 Derajat
+                const createIconSprite = (emoji, size) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 128; canvas.height = 128; // Ukuran kecil aman memori
+                    const ctx = canvas.getContext('2d');
+                    ctx.font = '80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.shadowColor = '#10b981'; ctx.shadowBlur = 10; 
+                    ctx.fillText(emoji, 64, 64);
+                    
+                    const tex = new THREE.CanvasTexture(canvas);
+                    tex.needsUpdate = true; // Wajib
+                    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+                    sprite.scale.set(size, size, 1);
+                    return sprite;
+                };
+
+                const icons = ['🦊', '🦅', '🐛', '🌳', '🌍', '☀️', '💧', '☁️'];
+                const iconSprites = [];
+                // Distribusikan 60 ikon melingkar 360 derajat mengelilingi kamera
+                for(let i=0; i<60; i++) {
+                    const icon = icons[Math.floor(Math.random() * icons.length)];
+                    const sprite = createIconSprite(icon, 15);
+                    
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 40 + Math.random() * 60; // Jarak 40-100m mengelilingi mata
+                    
+                    const x = Math.cos(angle) * radius;
+                    const z = Math.sin(angle) * radius;
+                    const yPos = (icon === '🦅' || icon === '☀️' || icon === '☁️') ? 15 + Math.random()*20 : (icon === '🐛' || icon === '🌳') ? -10 : 5;
+                    
+                    sprite.position.set(x, yPos, z);
+                    scene.add(sprite);
+                    iconSprites.push(sprite);
+                }
+
+                // 4. TEKS 3D RESOLUSI AMAN (Anti Blank Green-Screen)
+                // Menggunakan resolusi 2048x512 agar kompatibel dengan 100% GPU Smartphone
+                const textCanvas = document.createElement('canvas');
+                textCanvas.width = 2048; 
+                textCanvas.height = 512;
+                const ctx = textCanvas.getContext('2d');
+                ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0,0,2048,512);
+                ctx.textAlign = 'center';
+                
+                ctx.font = 'bold 60px "Inter", sans-serif'; ctx.fillStyle = '#6ee7b7';
+                ctx.fillText('Selamat Datang, di ruang Virtual,', 1024, 200);
+                
+                ctx.font = '900 110px "Inter", sans-serif'; ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#10b981'; ctx.shadowBlur = 20;
+                ctx.fillText('CAKRA-SAINS', 1024, 320);
+
+                const textTex = new THREE.CanvasTexture(textCanvas);
+                textTex.needsUpdate = true; // Wajib
+                const textSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex, transparent: true }));
+                textSprite.scale.set(160, 40, 1); 
+                textSprite.position.set(0, 10, -60); // Tetap di depan awal (-Z)
+                scene.add(textSprite);
+
+                scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+                // --- SISTEM KONTROL KAMERA (Absolut dan Stabil) ---
+                let lon = -90, lat = 0; // Default langsung menatap teks
+                let isDragging = false;
+                let prev = { x:0, y:0 };
+                let gyroActive = false; // Pelacak Status Sensor
+
+                const onDown = (e) => { isDragging = true; prev = { x: e.touches?.[0].clientX || e.clientX, y: e.touches?.[0].clientY || e.clientY }; };
+                const onUp = () => isDragging = false;
+                const onMove = (e) => {
+                    if(!isDragging || gyroActive) return; // Matikan drag jika Gyro jalan
+                    const x = e.touches?.[0].clientX || e.clientX;
+                    const y = e.touches?.[0].clientY || e.clientY;
+                    lon -= (x - prev.x) * 0.2; 
+                    lat += (y - prev.y) * 0.2; 
+                    lat = Math.max(-85, Math.min(85, lat));
+                    prev = { x, y };
+                };
+                container.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+                container.addEventListener('touchstart', onDown, {passive:false}); window.addEventListener('touchmove', onMove, {passive:false}); window.addEventListener('touchend', onUp);
+
+                // Pendeteksi Aktifnya Sensor Gyro
+                const handleDeviceOrientation = (e) => {
+                    if (e.alpha !== null && e.beta !== null && e.gamma !== null) {
+                        gyroActive = true;
+                    }
+                };
+                window.addEventListener('deviceorientation', handleDeviceOrientation);
+
+                let controls = null;
+                if (THREE.DeviceOrientationControls) {
+                    controls = new THREE.DeviceOrientationControls(camera);
+                }
+
+                let animationId;
+                const animate = () => {
+                    animationId = requestAnimationFrame(animate);
+                    
+                    const time = Date.now() * 0.001;
+                    iconSprites.forEach((sprite, i) => { sprite.position.y += Math.sin(time + i) * 0.02; });
+                    textSprite.position.y = 10 + Math.sin(time * 2) * 1.5;
+
+                    // Prioritas Kontrol
+                    if (gyroActive && controls) {
+                        controls.update(); 
+                    } else {
+                        // Matematika LookAt Absolut untuk mode Drag Manual
+                        const phi = THREE.MathUtils.degToRad(90 - lat);
+                        const theta = THREE.MathUtils.degToRad(lon);
+                        camera.lookAt(
+                            camera.position.x + 100 * Math.sin(phi) * Math.cos(theta),
+                            camera.position.y + 100 * Math.cos(phi),
+                            camera.position.z + 100 * Math.sin(phi) * Math.sin(theta)
+                        );
+                    }
+
+                    if (stereoEffect) stereoEffect.render(scene, camera);
+                    else renderer.render(scene, camera);
+                };
+
+                // Pemicu pertama untuk menghindari blank di detik pertama render
+                const onResize = () => {
+                    if(!container) return;
+                    const w = container.clientWidth; const h = container.clientHeight;
+                    if(w === 0 || h === 0) return;
+                    camera.aspect = w / h; camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
+                    if (stereoEffect) stereoEffect.setSize(w, h);
+                };
+                window.addEventListener('resize', onResize);
+                setTimeout(onResize, 100); // Penyelamat layout
+
+                animate();
+
+                return () => {
+                    cancelAnimationFrame(animationId);
+                    window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
+                    window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onUp);
+                    window.removeEventListener('deviceorientation', handleDeviceOrientation);
+                    window.removeEventListener('resize', onResize);
+                    renderer.dispose();
+                    if(controls) controls.dispose();
+                    if(container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+                };
+            }, [vrMode]);
+
+            return (
+                <div className="relative w-full h-full bg-black">
+                    <div ref={containerRef} className="absolute inset-0 cursor-move"></div>
+                    {vrMode && <div className="absolute top-0 bottom-0 left-1/2 w-1 bg-black/80 z-10 shadow-[0_0_15px_rgba(0,0,0,1)]"></div>}
+                    
+                    <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                        <div className="bg-black/50 text-white px-6 py-2 rounded-full border border-white/10 text-xs md:text-sm font-bold animate-pulse backdrop-blur whitespace-nowrap">
+                            Menunggu Siaran Film dari Guru... (Geser Layar / Putar HP)
+                        </div>
+                    </div>
+
+                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} />
+                </div>
+            );
+        }
+
+        // --- KOMPONEN TOMBOL BAWAH ---
+        function ControlsOverlay({ onExit, vrMode, setVrMode, isMuted, setIsMuted }) {
+            return (
+                <div className="absolute inset-x-0 bottom-0 p-6 flex justify-between items-end z-40 pointer-events-none">
+                    <button onClick={onExit} className="px-5 py-3 bg-red-600/80 backdrop-blur hover:bg-red-500 text-white rounded-2xl font-bold shadow-lg border border-red-400/30 transition-colors pointer-events-auto text-sm md:text-base">
+                        ✕ Keluar
+                    </button>
+                    
+                    <div className="flex gap-3 pointer-events-auto">
+                        <button onClick={() => setIsMuted(!isMuted)} className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border text-white ${isMuted ? 'bg-red-600 border-red-500' : 'bg-blue-600 border-blue-400'}`}>
+                            {isMuted ? <IconVolumeOff /> : <IconVolumeUp />}
+                        </button>
+                        <button onClick={() => setVrMode(!vrMode)} className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border ${vrMode ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-black/50 border-white/20 text-slate-300 hover:bg-white/10'}`}>
+                            <IconVR />
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<CakraSainsApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
