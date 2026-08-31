@@ -17,7 +17,10 @@
             theme: {
                 extend: {
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    colors: { eco: { 400: '#34d399', 500: '#10b981', 600: '#059669' } }
+                    colors: { eco: { 400: '#34d399', 500: '#10b981', 600: '#059669' } },
+                    animation: {
+                        'floatSlow': 'floatSlow 6s ease-in-out infinite',
+                    }
                 }
             }
         }
@@ -57,17 +60,6 @@
         .vr-video { width: 100%; height: 100%; object-fit: cover; }
         .normal-video { width: 100%; height: 100%; object-fit: contain; }
 
-        /* Fallback Fullscreen Ekstrim untuk HP yang memblokir API asli */
-        .fallback-fullscreen {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100dvh !important;
-            z-index: 99999 !important;
-            background-color: black !important;
-        }
-
         /* Latar Belakang Animasi Landing Page */
         .neon-bg {
             position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; overflow: hidden;
@@ -90,12 +82,16 @@
             0% { transform: translateY(0) rotate(0deg); }
             100% { transform: translateY(-40px) rotate(15deg); }
         }
-        @keyframes pulseGlow {
-            0% { box-shadow: 0 0 15px rgba(6, 182, 212, 0.4); }
-            50% { box-shadow: 0 0 30px rgba(6, 182, 212, 0.8); }
-            100% { box-shadow: 0 0 15px rgba(6, 182, 212, 0.4); }
+
+        /* Animasi Sembunyi Otomatis untuk Fullscreen */
+        .auto-hide-ui {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
         }
-        .animate-glow { animation: pulseGlow 3s infinite; }
+        .ui-hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transform: translateY(20px);
+        }
     </style>
 </head>
 <body>
@@ -113,7 +109,6 @@
         const IconFullscreen = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>;
         const IconEyeOpen = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
         const IconEyeClosed = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
-        const IconQuiz = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
         
         // --- ICONS EKOSISTEM ---
         const EcoEarth = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
@@ -125,7 +120,7 @@
         // --- KONFIGURASI SUPABASE ---
         const SUPABASE_URL = "https://xltrmoeabasrconlhijv.supabase.co";
         const SUPABASE_KEY = "sb_publishable_kzMgSC5JniUeJZGBGW1RIA_7aKyk0vh";
-        const STORAGE_BUCKET = "videos"; // Reused for images as well
+        const STORAGE_BUCKET = "videos";
 
         const supabaseApi = async (endpoint, options = {}) => {
             const res = await fetch(`${SUPABASE_URL}/rest/v1${endpoint}`, {
@@ -148,37 +143,36 @@
             const [isMuted, setIsMuted] = useState(true);
             const [broadcastData, setBroadcastData] = useState(null);
             const [activeBroadcastId, setActiveBroadcastId] = useState(null); 
+            const [tablesMissing, setTablesMissing] = useState(false);
 
             // SINKRONISASI REAL-TIME LINTAS PERANGKAT DENGAN SUPABASE
             useEffect(() => {
+                if (tablesMissing) return;
+
                 const checkBroadcastState = async () => {
                     try {
-                        const stateData = await supabaseApi('/broadcast_state?select=film_id&id=eq.1');
-                        const activeFilmId = stateData[0]?.film_id;
+                        const filmData = await supabaseApi('/films?select=*&order=id.desc&limit=1');
+                        const latestFilm = filmData[0];
 
-                        if (activeFilmId) {
-                            if (activeFilmId !== activeBroadcastId) {
-                                const filmData = await supabaseApi(`/films?id=eq.${activeFilmId}&select=*`);
-                                if (filmData && filmData[0]) {
-                                    const media = filmData[0];
-                                    
-                                    // Parse if it's a quiz disguised in the URL column
-                                    let payloadData = media;
-                                    let type = 'video';
-                                    if (media.format === 'Quiz') {
-                                        type = 'quiz';
-                                        payloadData = JSON.parse(media.url);
-                                    }
+                        if (latestFilm) {
+                            if (latestFilm.id !== activeBroadcastId) {
+                                // DETEKSI FORMAT KUIS ATAU MATERI
+                                let type = 'video';
+                                let payloadData = latestFilm;
+                                if (latestFilm.format === 'Quiz') {
+                                    type = 'quiz';
+                                    try { payloadData = JSON.parse(latestFilm.url); } catch(e) {}
+                                }
 
-                                    const payload = { type: type, data: payloadData, timestamp: Date.now() };
-                                    setBroadcastData(payload);
-                                    setActiveBroadcastId(activeFilmId);
-                                    localStorage.setItem('cakra_broadcast', JSON.stringify(payload));
+                                const payload = { type, data: payloadData, timestamp: Date.now() };
+                                
+                                setBroadcastData(payload);
+                                setActiveBroadcastId(latestFilm.id);
+                                localStorage.setItem('cakra_broadcast', JSON.stringify(payload));
 
-                                    if (currentView === 'waiting') {
-                                        setVrMode(true);
-                                        setCurrentView('player');
-                                    }
+                                if (currentView === 'waiting') {
+                                    setVrMode(true);
+                                    setCurrentView('player');
                                 }
                             }
                         } else {
@@ -189,7 +183,9 @@
                             }
                         }
                     } catch (e) {
-                        console.warn("Polling error. Pastikan tabel 'broadcast_state' dan 'films' sudah dibuat.", e);
+                        if (e.message.includes('404')) {
+                            setTablesMissing(true); 
+                        }
                     }
                 };
 
@@ -200,7 +196,9 @@
                     if (e.key === 'cakra_broadcast' && e.newValue) {
                         const payload = JSON.parse(e.newValue);
                         setBroadcastData(payload);
-                        setActiveBroadcastId(payload.data.id || payload.timestamp);
+                        // Perbaikan pelacakan ID pada Storage Sync
+                        if(payload.type === 'quiz') setActiveBroadcastId(payload.timestamp); // fallback id untuk kuis
+                        else setActiveBroadcastId(payload.data.id);
                     }
                 };
                 window.addEventListener('storage', handleStorageChange);
@@ -209,48 +207,36 @@
                     clearInterval(interval);
                     window.removeEventListener('storage', handleStorageChange);
                 };
-            }, [currentView, activeBroadcastId]);
+            }, [currentView, activeBroadcastId, tablesMissing]); 
 
             const handleBroadcast = async (media) => {
                 try {
-                    await supabaseApi('/broadcast_state?id=eq.1', {
-                        method: 'PATCH',
-                        body: JSON.stringify({ film_id: media.id, updated_at: new Date().toISOString() })
-                    });
-                    
                     let type = 'video';
                     let payloadData = media;
                     if (media.format === 'Quiz') {
                         type = 'quiz';
-                        payloadData = JSON.parse(media.url);
+                        try { payloadData = JSON.parse(media.url); } catch(e) {}
                     }
 
-                    const payload = { type: type, data: payloadData, timestamp: Date.now() };
+                    const payload = { type, data: payloadData, timestamp: Date.now() };
                     setBroadcastData(payload);
                     setActiveBroadcastId(media.id);
                     localStorage.setItem('cakra_broadcast', JSON.stringify(payload));
                     
                 } catch (error) {
-                    alert("Gagal memulai siaran. Pastikan tabel database benar.");
+                    console.error("Gagal memulai siaran:", error);
+                    alert("Gagal memulai siaran. Pastikan koneksi internet stabil.");
                 }
             };
 
             const handleStopBroadcast = async () => {
-                try {
-                    await supabaseApi('/broadcast_state?id=eq.1', {
-                        method: 'PATCH',
-                        body: JSON.stringify({ film_id: null, updated_at: new Date().toISOString() })
-                    });
-                    setBroadcastData(null);
-                    setActiveBroadcastId(null);
-                    localStorage.removeItem('cakra_broadcast');
-                } catch (error) {
-                    console.error("Gagal menghentikan siaran:", error);
-                }
+                setBroadcastData(null);
+                setActiveBroadcastId(null);
+                localStorage.removeItem('cakra_broadcast');
             };
 
             return (
-                <div id="app-container" className="w-full h-screen text-white font-sans overflow-hidden selection:bg-cyan-500/30 bg-[#000000]">
+                <div className="w-full h-screen text-white font-sans overflow-hidden selection:bg-cyan-500/30 bg-[#000000]">
                     {currentView === 'landing' && <LandingScreen onEnterStudent={() => { setVrMode(true); setCurrentView('player'); }} onEnterTeacher={() => setCurrentView('teacher')} />}
                     {currentView === 'player' && <MasterPlayer vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={() => { setCurrentView('landing'); }} broadcastData={broadcastData} />}
                     {currentView === 'teacher' && <TeacherConsole onLogout={() => setCurrentView('landing')} onBroadcast={handleBroadcast} onStopBroadcast={handleStopBroadcast} broadcastData={broadcastData} />}
@@ -275,7 +261,7 @@
 
                     <div className="z-10 text-center max-w-4xl glass-panel p-10 md:p-16 rounded-[2.5rem] relative">
                         {/* PENGGANTIAN KARAKTER VR DENGAN IKON BOX ELEGAN */}
-                        <div className="absolute -top-16 -right-8 md:-top-20 md:-right-12 w-32 h-32 md:w-40 md:h-40 bg-black/40 border border-cyan-500/30 backdrop-blur-xl rounded-3xl flex items-center justify-center animate-glow shadow-2xl rotate-12">
+                        <div className="absolute -top-16 -right-8 md:-top-20 md:-right-12 w-32 h-32 md:w-40 md:h-40 bg-black/40 border border-cyan-500/30 backdrop-blur-xl rounded-3xl flex items-center justify-center shadow-2xl rotate-12">
                             <svg className="w-16 h-16 md:w-20 md:h-20 text-cyan-400 drop-shadow-[0_0_10px_rgba(6,182,212,0.8)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" opacity="0.2"/>
                                 <rect x="2" y="7" width="20" height="10" rx="3" ry="3" fill="#000" strokeWidth="2"></rect>
@@ -323,7 +309,7 @@
 
             const fileInputRef = useRef(null);
             const quizAssetRef = useRef(null);
-            const liveMediaId = broadcastData?.data?.id;
+            const liveMediaId = broadcastData?.data?.id; // Bisa undefined untuk kuis, tak masalah untuk prototype
 
             const fetchMedia = async () => {
                 try {
@@ -364,36 +350,34 @@
                 finally { setIsUploading(false); }
             };
 
-            // FUNGSI PEMBUATAN & SIMPAN KUIS
+            // FUNGSI PEMBUATAN KUIS DENGAN VIDEO MP4
             const handleCreateQuiz = async (e) => {
                 e.preventDefault();
                 if (!quizQuestion) return alert("Pertanyaan harus diisi!");
+                if (!quizAssetFile) return alert("Video VR (MP4) wajib diunggah untuk kuis ini!");
                 setIsUploading(true);
 
                 try {
-                    let assetUrl = null;
-                    if (quizAssetFile) {
-                        const fileExt = quizAssetFile.name.split('.').pop();
-                        const fileName = `asset_${Date.now()}.${fileExt}`;
-                        const storageUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${fileName}`;
-                        
-                        const uploadRes = await fetch(storageUrl, {
-                            method: 'POST',
-                            headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': quizAssetFile.type },
-                            body: quizAssetFile
-                        });
-                        if (uploadRes.ok) {
-                            assetUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${fileName}`;
-                        }
-                    }
+                    const fileExt = quizAssetFile.name.split('.').pop();
+                    const fileName = `quiz_${Date.now()}.${fileExt}`;
+                    const storageUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${fileName}`;
+                    
+                    const uploadRes = await fetch(storageUrl, {
+                        method: 'POST',
+                        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': quizAssetFile.type },
+                        body: quizAssetFile
+                    });
+                    if (!uploadRes.ok) throw new Error("Gagal unggah video kuis.");
+                    
+                    const assetUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${fileName}`;
 
-                    // Enkripsi data kuis ke dalam format URL table films
-                    const quizData = { question: quizQuestion, bgUrl: assetUrl };
+                    // Simpan sebagai JSON string
+                    const quizData = { question: quizQuestion, videoUrl: assetUrl };
                     const newRecord = { 
                         title: `Kuis: ${quizQuestion.substring(0, 20)}...`, 
                         format: 'Quiz', 
-                        is_video: false, 
-                        url: JSON.stringify(quizData) // Trik simpan JSON di Supabase
+                        is_video: true, 
+                        url: JSON.stringify(quizData) 
                     };
 
                     await supabaseApi('/films', { method: 'POST', body: JSON.stringify(newRecord) });
@@ -401,11 +385,12 @@
                     setQuizQuestion('');
                     setQuizAssetFile(null);
                     if(quizAssetRef.current) quizAssetRef.current.value = "";
-                    alert("Kuis berhasil disimpan ke pustaka!");
+                    alert("Kuis VR berhasil disimpan ke pustaka!");
                     setActiveTab('media');
 
                 } catch(err) {
-                    alert("Gagal membuat kuis.");
+                    alert("Gagal membuat kuis. Pastikan koneksi stabil.");
+                    console.error(err);
                 } finally {
                     setIsUploading(false);
                 }
@@ -451,7 +436,7 @@
                             {/* TAB NAVIGASI */}
                             <div className="flex gap-4 mb-8 border-b border-white/10 pb-4">
                                 <button onClick={() => setActiveTab('media')} className={`px-4 py-2 font-bold transition-all ${activeTab === 'media' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'}`}>Pustaka Media</button>
-                                <button onClick={() => setActiveTab('quiz')} className={`px-4 py-2 font-bold transition-all ${activeTab === 'quiz' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'}`}>Pembuatan Kuis 360</button>
+                                <button onClick={() => setActiveTab('quiz')} className={`px-4 py-2 font-bold transition-all ${activeTab === 'quiz' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'}`}>Pembuatan Kuis Interaktif</button>
                             </div>
 
                             {activeTab === 'media' && (
@@ -464,7 +449,7 @@
                                         <div className="flex gap-3">
                                             <button onClick={fetchMedia} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-semibold">🔄 Refresh</button>
                                             <button onClick={() => fileInputRef.current.click()} disabled={isUploading} className="px-5 py-2.5 bg-white text-black hover:bg-slate-200 rounded-xl font-bold shadow-lg">
-                                                {isUploading ? 'Memproses...' : '+ Tambah Film'}
+                                                {isUploading ? 'Memproses...' : '+ Tambah Film Materi'}
                                             </button>
                                             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="video/mp4,video/webm" className="hidden" />
                                         </div>
@@ -482,8 +467,8 @@
                                                 return (
                                                     <div key={media.id} className={`glass-panel rounded-2xl overflow-hidden flex flex-col group transition-all ${isLive ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/10 hover:border-eco-500/50'}`}>
                                                         <div className="h-40 bg-black/60 relative flex items-center justify-center overflow-hidden border-b border-white/5">
-                                                            {isQuiz ? <IconQuiz /> : <IconFilm />}
-                                                            <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-bold">{isQuiz ? 'KUIS 360' : 'VIDEO'}</div>
+                                                            {isQuiz ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> : <IconFilm />}
+                                                            <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-1 rounded text-xs text-white font-bold">{isQuiz ? 'KUIS VR' : 'VIDEO MATERI'}</div>
                                                             <button onClick={() => handleDelete(media.id)} className="absolute top-3 right-3 p-2 bg-black/80 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900 hover:text-white border border-red-500/30">
                                                                 <IconTrash />
                                                             </button>
@@ -496,12 +481,10 @@
                                                         <div className="p-5 flex-1 flex flex-col bg-black/20">
                                                             <h4 className="font-bold text-lg mb-4 line-clamp-2 text-white">{media.title}</h4>
                                                             <div className="flex gap-2 mt-auto">
-                                                                {!isQuiz && (
-                                                                    <button onClick={() => setPreviewMedia(media)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold border border-white/10 transition-colors">
-                                                                        Pratinjau
-                                                                    </button>
-                                                                )}
-                                                                <button onClick={() => isLive ? onStopBroadcast() : onBroadcast(media)} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all border ${isLive ? 'bg-red-600/20 text-red-400 border-red-500/50 hover:bg-red-600/40' : 'bg-gradient-to-r from-eco-600 to-cyan-600 text-white border-transparent shadow-lg hover:opacity-90'}`}>
+                                                                <button onClick={() => setPreviewMedia(media)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold border border-white/10 transition-colors">
+                                                                    Pratinjau
+                                                                </button>
+                                                                <button onClick={() => onBroadcast(media)} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all border ${isLive ? 'bg-red-600/20 text-red-400 border-red-500/50 hover:bg-red-600/40' : 'bg-gradient-to-r from-eco-600 to-cyan-600 text-white border-transparent shadow-lg hover:opacity-90'}`}>
                                                                     {isLive ? 'Hentikan Siaran' : '▶ Siarkan ke Siswa'}
                                                                 </button>
                                                             </div>
@@ -516,22 +499,22 @@
 
                             {activeTab === 'quiz' && (
                                 <div className="max-w-2xl mx-auto">
-                                    <h3 className="text-2xl font-bold text-white mb-6">Buat Kuis Interaktif 360</h3>
+                                    <h3 className="text-2xl font-bold text-white mb-6">Buat Kuis Interaktif (Video VR)</h3>
                                     <form onSubmit={handleCreateQuiz} className="space-y-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-2">Pertanyaan Kuis (Ya/Tidak)</label>
+                                            <label className="block text-sm font-medium text-slate-300 mb-2">Pertanyaan Kuis</label>
                                             <textarea required value={quizQuestion} onChange={(e) => setQuizQuestion(e.target.value)} rows="3" className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white outline-none focus:border-cyan-400" placeholder="Contoh: Apakah rubah termasuk hewan karnivora?"></textarea>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-2">Unggah Aset Latar Belakang (Gambar 360) - Opsional</label>
-                                            <input type="file" ref={quizAssetRef} onChange={(e) => setQuizAssetFile(e.target.files[0])} accept="image/jpeg,image/png,image/webp" className="w-full bg-black/50 border border-white/20 rounded-xl p-3 text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-500 cursor-pointer" />
+                                            <label className="block text-sm font-medium text-slate-300 mb-2">Unggah Video VR (MP4) sebagai Latar Belakang Kuis</label>
+                                            <input type="file" required ref={quizAssetRef} onChange={(e) => setQuizAssetFile(e.target.files[0])} accept="video/mp4,video/webm" className="w-full bg-black/50 border border-white/20 rounded-xl p-3 text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-500 cursor-pointer" />
                                         </div>
                                         <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
-                                            <h4 className="text-blue-300 font-bold text-sm mb-2">Info Gestur untuk Siswa:</h4>
+                                            <h4 className="text-blue-300 font-bold text-sm mb-2">Sistem Algoritma Gestur Kepala (Otomatis Aktif):</h4>
                                             <ul className="text-slate-300 text-xs space-y-1">
-                                                <li>• Mengangguk 2x = Menjawab Ya / Setuju</li>
-                                                <li>• Mendongak 2x = Menjawab Tidak / Menolak</li>
-                                                <li>• Geleng Kanan 2x = Lanjut Pertanyaan</li>
+                                                <li>• Mengangguk Bawah-Atas 2x = Menjawab Ya / Setuju</li>
+                                                <li>• Mendongak Atas-Bawah 2x = Menjawab Tidak / Menolak</li>
+                                                <li>• Geleng Kanan 2x = Lanjut Kuis</li>
                                                 <li>• Geleng Kiri 2x = Kembali</li>
                                             </ul>
                                         </div>
@@ -548,18 +531,31 @@
                     {previewMedia && (
                         <div className="fixed inset-0 z-[99999] bg-black flex flex-col">
                             <div className="flex-1 relative">
-                                <HTMLVideoVRPlayer 
-                                    vrMode={previewVrMode} 
-                                    setVrMode={setPreviewVrMode} 
-                                    isMuted={previewIsMuted} 
-                                    setIsMuted={setPreviewIsMuted} 
-                                    onExit={() => {
-                                        setPreviewMedia(null);
-                                        setPreviewVrMode(false);
-                                        setPreviewIsMuted(true);
-                                    }} 
-                                    videoUrl={previewMedia.url} 
-                                />
+                                {previewMedia.format === 'Quiz' ? (() => {
+                                    let qData = {};
+                                    try { qData = JSON.parse(previewMedia.url); } catch(e){}
+                                    return (
+                                        <InteractiveQuizVideoPlayer 
+                                            vrMode={previewVrMode} 
+                                            setVrMode={setPreviewVrMode} 
+                                            isMuted={previewIsMuted} 
+                                            setIsMuted={setPreviewIsMuted} 
+                                            onExit={() => { setPreviewMedia(null); setPreviewVrMode(false); setPreviewIsMuted(true); }} 
+                                            quizData={qData} 
+                                            isPreview={true}
+                                        />
+                                    );
+                                })() : (
+                                    <HTMLVideoVRPlayer 
+                                        vrMode={previewVrMode} 
+                                        setVrMode={setPreviewVrMode} 
+                                        isMuted={previewIsMuted} 
+                                        setIsMuted={setPreviewIsMuted} 
+                                        onExit={() => { setPreviewMedia(null); setPreviewVrMode(false); setPreviewIsMuted(true); }} 
+                                        videoUrl={previewMedia.url} 
+                                        isPreview={true}
+                                    />
+                                )}
                             </div>
                         </div>
                     )}
@@ -567,24 +563,23 @@
             );
         }
 
-        // --- MASTER PLAYER (Routing antara Video, Eco Room, dan Quiz Room) ---
+        // --- MASTER PLAYER ---
         function MasterPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, broadcastData }) {
             if (broadcastData?.type === 'video' && broadcastData?.data?.url) {
                 return <HTMLVideoVRPlayer vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={onExit} videoUrl={broadcastData.data.url} />;
             } else if (broadcastData?.type === 'quiz' && broadcastData?.data) {
-                return <Quiz3DRoom vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={onExit} quizData={broadcastData.data} />;
+                return <InteractiveQuizVideoPlayer vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={onExit} quizData={broadcastData.data} />;
             } else {
                 return <Ecosystem3DRoom vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={onExit} />;
             }
         }
 
-        // --- 1. HTML5 VR PLAYER (Video) ---
-        function HTMLVideoVRPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, videoUrl }) {
+        // --- 1. PURE HTML5 VR PLAYER (MATERI VIDEO) ---
+        function HTMLVideoVRPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, videoUrl, isPreview = false }) {
             const leftVideoRef = useRef(null);
             const rightVideoRef = useRef(null);
             const [isUiVisible, setIsUiVisible] = useState(true);
 
-            // Auto-hide UI Logic
             useEffect(() => {
                 let timeout;
                 const resetTimer = () => {
@@ -639,18 +634,22 @@
                             </div>
                         )}
                     </div>
-                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} isUiVisible={isUiVisible} />
+                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} isUiVisible={isUiVisible} isPreview={isPreview} />
                 </div>
             );
         }
 
-        // --- 2. RUANG KUIS 360 (Dengan Deteksi Gestur Kepala) ---
-        function Quiz3DRoom({ vrMode, setVrMode, isMuted, setIsMuted, onExit, quizData }) {
-            const containerRef = useRef(null);
+        // --- NEW: KUIS INTERAKTIF VIDEO VR ---
+        function InteractiveQuizVideoPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, quizData, isPreview = false }) {
+            const videoUrl = quizData?.videoUrl;
+            
+            const leftVideoRef = useRef(null);
+            const rightVideoRef = useRef(null);
+            
             const [isUiVisible, setIsUiVisible] = useState(true);
-            const [answerStatus, setAnswerStatus] = useState(''); // Feedback UI
+            const [answerStatus, setAnswerStatus] = useState('');
 
-            // Auto-hide UI Logic
+            // UI Auto-hide logic sama dengan materi
             useEffect(() => {
                 let timeout;
                 const resetTimer = () => {
@@ -665,99 +664,79 @@
                 return () => { window.removeEventListener('mousemove', resetTimer); window.removeEventListener('touchstart', resetTimer); window.removeEventListener('click', resetTimer); clearTimeout(timeout); };
             }, []);
 
+            // Logika putar video sama dengan materi
             useEffect(() => {
-                if (!containerRef.current || !window.THREE) return;
-                const THREE = window.THREE;
-                const container = containerRef.current;
-                
-                const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x0a0a1a);
-
-                const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-                camera.position.set(0, 0, 0);
-
-                const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
-                renderer.setSize(container.clientWidth, container.clientHeight);
-                container.appendChild(renderer.domElement);
-
-                let stereoEffect = null;
-                if (vrMode && THREE.StereoEffect) {
-                    stereoEffect = new THREE.StereoEffect(renderer);
-                    stereoEffect.setSize(container.clientWidth, container.clientHeight);
+                if (leftVideoRef.current) {
+                    leftVideoRef.current.muted = isMuted;
+                    if (rightVideoRef.current) rightVideoRef.current.muted = true; 
+                    
+                    const playVideos = async () => {
+                        try {
+                            const p = [leftVideoRef.current.play()];
+                            if(rightVideoRef.current) p.push(rightVideoRef.current.play());
+                            await Promise.all(p);
+                        } catch (e) { console.log("Autoplay ditolak."); }
+                    };
+                    playVideos();
                 }
+            }, [videoUrl, isMuted, vrMode]);
 
+            const syncVideos = () => {
+                if (leftVideoRef.current && rightVideoRef.current) {
+                    if (Math.abs(leftVideoRef.current.currentTime - rightVideoRef.current.currentTime) > 0.1) {
+                        rightVideoRef.current.currentTime = leftVideoRef.current.currentTime;
+                    }
+                }
+            };
+
+            // ALGORITMA GESTUR KEPALA PADA VIDEO VR (Tanpa WebGL)
+            useEffect(() => {
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                     DeviceOrientationEvent.requestPermission().catch(console.error);
                 }
 
-                // Bangun Latar 360 (Gambar yang diunggah atau Default Grid)
-                if (quizData.bgUrl) {
-                    const geometry = new THREE.SphereGeometry(500, 60, 40);
-                    geometry.scale(-1, 1, 1);
-                    const texture = new THREE.TextureLoader().load(quizData.bgUrl);
-                    const material = new THREE.MeshBasicMaterial({ map: texture });
-                    scene.add(new THREE.Mesh(geometry, material));
-                } else {
-                    const gridHelper = new THREE.GridHelper(300, 60, 0x0ea5e9, 0x0f172a);
-                    gridHelper.position.y = -20;
-                    scene.add(gridHelper);
-                }
-
-                // Sistem Kontrol
-                let lon = -90, lat = 0; 
-                let isDragging = false;
-                let prev = { x:0, y:0 };
-                const onDown = (e) => { isDragging = true; prev = { x: e.touches?.[0].clientX || e.clientX, y: e.touches?.[0].clientY || e.clientY }; };
-                const onUp = () => isDragging = false;
-                const onMove = (e) => {
-                    if(!isDragging) return;
-                    const x = e.touches?.[0].clientX || e.clientX, y = e.touches?.[0].clientY || e.clientY;
-                    lon -= (x - prev.x) * 0.2; lat += (y - prev.y) * 0.2; lat = Math.max(-85, Math.min(85, lat));
-                    prev = { x, y };
-                };
-                container.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-                container.addEventListener('touchstart', onDown, {passive:false}); window.addEventListener('touchmove', onMove, {passive:false}); window.addEventListener('touchend', onUp);
-
-                let controls = null;
-                if (THREE.DeviceOrientationControls) {
-                    controls = new THREE.DeviceOrientationControls(camera);
-                }
-
-                // --- ALGORITMA DETEKSI GESTUR KEPALA ---
                 let lastGestureTime = Date.now();
                 let gestureCounts = { right: 0, left: 0, up: 0, down: 0 };
-                let gyroState = 'IDLE'; // IDLE, PEAK_R, PEAK_L, PEAK_U, PEAK_D
-                let baseYaw = null;
-                let basePitch = null;
+                let gestureState = 'IDLE';
+                let baseAlpha = null;
+                let baseGamma = null; // Gamma efektif untuk pitch di posisi Landscape
 
-                const detectGesture = () => {
-                    // Ambil rotasi absolut kamera di ruang dunia
-                    const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-                    if (baseYaw === null) { baseYaw = euler.y; basePitch = euler.x; return; }
+                const handleOrientation = (event) => {
+                    if (event.alpha === null || event.gamma === null) return;
+                    
+                    let alpha = event.alpha; 
+                    let gamma = event.gamma;   
 
-                    const yawDiff = euler.y - baseYaw;
-                    const pitchDiff = euler.x - basePitch;
-
-                    const threshold = 0.35; // Sekitar 20 derajat patahan
-                    const resetThresh = 0.15; // Kembali ke pusat
-
-                    // Reset hitungan jika lebih dari 2.5 detik tidak ada gerakan lanjutan
-                    if (Date.now() - lastGestureTime > 2500) {
-                        gestureCounts = { right: 0, left: 0, up: 0, down: 0 };
-                        baseYaw = euler.y; // Auto kalibrasi ulang pusat
-                        basePitch = euler.x;
+                    if (baseAlpha === null) {
+                        baseAlpha = alpha;
+                        baseGamma = gamma;
+                        return;
                     }
 
-                    // Deteksi Geleng (Yaw)
+                    // Kalkulasi Yaw (Geleng Kiri/Kanan)
+                    let yawDiff = alpha - baseAlpha;
+                    if (yawDiff > 180) yawDiff -= 360;
+                    if (yawDiff < -180) yawDiff += 360;
+                    
+                    // Kalkulasi Pitch (Angguk/Dongak)
+                    let pitchDiff = gamma - baseGamma;
+
+                    const threshold = 15; // Derajat patahan
+                    const resetThresh = 5; // Toleransi kembali ke pusat
+
+                    if (Date.now() - lastGestureTime > 2500) {
+                        gestureCounts = { right: 0, left: 0, up: 0, down: 0 };
+                        baseAlpha = alpha;
+                        baseGamma = gamma;
+                    }
+
                     if (gestureState === 'IDLE') {
                         if (yawDiff < -threshold) gestureState = 'PEAK_R';
                         else if (yawDiff > threshold) gestureState = 'PEAK_L';
-                        else if (pitchDiff > threshold) gestureState = 'PEAK_D'; // Nunduk/Angguk
-                        else if (pitchDiff < -threshold) gestureState = 'PEAK_U'; // Dongak
+                        else if (pitchDiff > threshold) gestureState = 'PEAK_D'; 
+                        else if (pitchDiff < -threshold) gestureState = 'PEAK_U';
                     }
 
-                    // Hitung saat kepala kembali ke pusat
                     if (gestureState !== 'IDLE') {
                         if (Math.abs(yawDiff) < resetThresh && Math.abs(pitchDiff) < resetThresh) {
                             if (gestureState === 'PEAK_R') gestureCounts.right++;
@@ -768,7 +747,6 @@
                             gestureState = 'IDLE';
                             lastGestureTime = Date.now();
 
-                            // Eksekusi Aksi jika mencapai 2x
                             if (gestureCounts.right >= 2) { setAnswerStatus('LANJUT KUIS >>'); gestureCounts.right = 0; setTimeout(()=>setAnswerStatus(''), 2000); }
                             if (gestureCounts.left >= 2) { setAnswerStatus('<< KEMBALI'); gestureCounts.left = 0; setTimeout(()=>setAnswerStatus(''), 2000); }
                             if (gestureCounts.down >= 2) { setAnswerStatus('JAWABAN: IYA / SETUJU'); gestureCounts.down = 0; setTimeout(()=>setAnswerStatus(''), 2000); }
@@ -777,68 +755,46 @@
                     }
                 };
 
-                let animationId;
-                const animate = () => {
-                    animationId = requestAnimationFrame(animate);
-
-                    if (controls && controls.deviceOrientation && controls.deviceOrientation.alpha !== null) {
-                        controls.update(); 
-                    } else {
-                        const phi = THREE.MathUtils.degToRad(90 - lat);
-                        const theta = THREE.MathUtils.degToRad(lon);
-                        camera.lookAt(100 * Math.sin(phi) * Math.cos(theta), 100 * Math.cos(phi), 100 * Math.sin(phi) * Math.sin(theta));
-                    }
-
-                    detectGesture(); // Jalankan deteksi gestur tiap frame
-
-                    if (stereoEffect) stereoEffect.render(scene, camera);
-                    else renderer.render(scene, camera);
-                };
-                animate();
-
-                const onResize = () => {
-                    const w = container.clientWidth; const h = container.clientHeight;
-                    camera.aspect = w / h; camera.updateProjectionMatrix();
-                    renderer.setSize(w, h);
-                    if (stereoEffect) stereoEffect.setSize(w, h);
-                };
-                window.addEventListener('resize', onResize);
-
-                return () => {
-                    cancelAnimationFrame(animationId);
-                    window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
-                    window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onUp);
-                    window.removeEventListener('resize', onResize);
-                    renderer.dispose();
-                    if(controls) controls.dispose();
-                    if(container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
-                };
-            }, [vrMode, quizData]);
+                window.addEventListener('deviceorientation', handleOrientation);
+                return () => window.removeEventListener('deviceorientation', handleOrientation);
+            }, []);
 
             return (
-                <div className="relative w-full h-full bg-black">
-                    <div ref={containerRef} className="absolute inset-0 cursor-move"></div>
-                    {vrMode && <div className="absolute top-0 bottom-0 left-1/2 w-1 bg-black/80 z-10 shadow-[0_0_15px_rgba(0,0,0,1)]"></div>}
-                    
-                    {/* UI Kuis di atas Canvas 3D */}
-                    <div className="absolute top-10 inset-x-0 z-20 flex flex-col items-center pointer-events-none">
-                        <div className="bg-black/60 text-white px-8 py-4 rounded-3xl border border-cyan-500/50 shadow-[0_0_30px_rgba(6,182,212,0.4)] backdrop-blur-md max-w-2xl text-center mx-4">
+                <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+                    <div className="absolute inset-0 flex w-full h-full">
+                        <div className={`vr-lens-container ${vrMode ? 'w-1/2 border-r-2 border-slate-900/50' : 'w-full'}`}>
+                            <div className={vrMode ? 'vr-lens-mask' : 'w-full h-full relative'}>
+                                <video ref={leftVideoRef} src={videoUrl} className={vrMode ? 'vr-video' : 'normal-video'} onTimeUpdate={syncVideos} playsInline loop crossOrigin="anonymous" />
+                            </div>
+                        </div>
+                        {vrMode && (
+                            <div className="vr-lens-container w-1/2 border-l-2 border-slate-900/50">
+                                <div className="vr-lens-mask">
+                                    <video ref={rightVideoRef} src={videoUrl} className="vr-video" playsInline muted loop crossOrigin="anonymous" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* UI Overlay Kuis */}
+                    <div className={`absolute top-10 inset-x-0 z-20 flex flex-col items-center pointer-events-none transition-opacity duration-500 ${isUiVisible ? 'opacity-100' : 'opacity-0'}`}>
+                        <div className="bg-black/70 text-white px-8 py-4 rounded-3xl border border-cyan-500/50 shadow-[0_0_30px_rgba(6,182,212,0.4)] backdrop-blur-md max-w-2xl text-center mx-4">
                             <h2 className="text-xl md:text-3xl font-bold mb-2">{quizData?.question || "Pertanyaan Kuis?"}</h2>
-                            <p className="text-cyan-300 text-xs md:text-sm font-medium">Angguk 2x (Iya) | Dongak 2x (Tidak) | Geleng Kanan 2x (Lanjut)</p>
+                            <p className="text-cyan-300 text-[10px] md:text-xs font-medium">Angguk Bawah-Atas 2x (Iya) | Dongak Atas-Bawah 2x (Tidak) <br/> Geleng Kanan 2x (Lanjut) | Geleng Kiri 2x (Kembali)</p>
                         </div>
                         {answerStatus && (
-                            <div className="mt-8 bg-green-500/80 text-white px-8 py-3 rounded-full font-bold text-xl md:text-2xl animate-pulse shadow-lg backdrop-blur">
+                            <div className="mt-8 bg-green-500/90 text-white px-8 py-3 rounded-full font-bold text-xl md:text-2xl animate-pulse shadow-lg backdrop-blur">
                                 {answerStatus}
                             </div>
                         )}
                     </div>
 
-                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} isUiVisible={isUiVisible} />
+                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} isUiVisible={isUiVisible} isPreview={isPreview} />
                 </div>
             );
         }
 
-        // --- 3. RUANG DEMO EKOSISTEM 360 (Three.js Murni) ---
+        // --- 2. RUANG DEMO EKOSISTEM 360 (Tetap Optimal Sesuai Perintah) ---
         function Ecosystem3DRoom({ vrMode, setVrMode, isMuted, setIsMuted, onExit }) {
             const containerRef = useRef(null);
             const [isUiVisible, setIsUiVisible] = useState(true);
@@ -1020,26 +976,24 @@
 
         // --- KOMPONEN TOMBOL BAWAH ---
         function ControlsOverlay({ onExit, vrMode, setVrMode, isMuted, setIsMuted, isUiVisible = true, isPreview = false }) {
-            
-            // Fullscreen Handler yang diperkuat untuk WebKit (iOS/Android)
             const handleFullscreen = () => {
                 const elem = document.documentElement;
-                const isFullscreenNow = document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('fallback-fullscreen');
-                
-                if (!isFullscreenNow) {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.body.classList.contains('fallback-fullscreen')) {
                     if (elem.requestFullscreen) {
-                        elem.requestFullscreen().catch(() => document.body.classList.add('fallback-fullscreen'));
+                        elem.requestFullscreen().catch(err => document.body.classList.add('fallback-fullscreen'));
                     } else if (elem.webkitRequestFullscreen) {
-                        elem.webkitRequestFullscreen();
-                        // Paksa fallback jika webkit gagal
+                        elem.webkitRequestFullscreen(); 
                         setTimeout(() => { if(!document.webkitFullscreenElement) document.body.classList.add('fallback-fullscreen'); }, 500);
                     } else {
                         document.body.classList.add('fallback-fullscreen');
                     }
                 } else {
                     document.body.classList.remove('fallback-fullscreen');
-                    if (document.exitFullscreen) document.exitFullscreen();
-                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    }
                 }
             };
 
