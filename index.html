@@ -142,12 +142,10 @@
             const [isMuted, setIsMuted] = useState(true);
             const [broadcastData, setBroadcastData] = useState(null);
 
-            // --- SISTEM SINKRONISASI REAL-TIME DIPERBAIKI (ANTI CROSS-DEVICE BUG) ---
+            // --- SISTEM SINKRONISASI REAL-TIME MURNI (ANTI-CACHE) ---
             useEffect(() => {
                 const fetchLiveState = async () => {
                     try {
-                        // BUG FIX: Menggunakan header Cache-Control absolut alih-alih parameter `&t=`
-                        // PostgREST Supabase akan menolak parameter `t` jika kolom tersebut tidak ada.
                         const res = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=url`, {
                             headers: { 
                                 'apikey': SUPABASE_KEY, 
@@ -163,7 +161,6 @@
                             if (data && data.length > 0) {
                                 const parsedPayload = JSON.parse(data[0].url);
                                 setBroadcastData(prev => {
-                                    // Update jika broadcast baru atau timestamp lebih baru
                                     if (!prev || parsedPayload.timestamp > prev.timestamp) {
                                         return parsedPayload;
                                     }
@@ -174,11 +171,10 @@
                             }
                         }
                     } catch (e) {
-                        // Abaikan error jaringan agar tidak membanjiri konsol
+                        // Abaikan error jaringan polling
                     }
                 };
 
-                // Polling setiap 2 detik secara konsisten di semua perangkat
                 const interval = setInterval(fetchLiveState, 2000);
                 return () => clearInterval(interval);
             }, []);
@@ -186,10 +182,10 @@
             const simulateBroadcastToStudent = async (media) => {
                 const payload = media ? { type: 'video', data: media, timestamp: Date.now() } : null;
                 
-                // Update Local UI Instan
+                // Update Lokal Instan
                 setBroadcastData(payload);
 
-                // Tembak Perintah ke Database Utama agar Semua Perangkat Lain Sinkron
+                // Update ke Supabase
                 const headers = { 
                     'apikey': SUPABASE_KEY, 
                     'Authorization': `Bearer ${SUPABASE_KEY}`, 
@@ -219,7 +215,7 @@
             return (
                 <div className="w-full h-screen text-white font-sans overflow-hidden selection:bg-cyan-500/30 bg-[#020617]">
                     {currentView === 'landing' && <LandingScreen onEnterStudent={() => { 
-                        enterFullscreenAndLandscape(); // Auto-Landscape & Fullscreen
+                        enterFullscreenAndLandscape();
                         setVrMode(true); 
                         setCurrentView('player'); 
                     }} onEnterTeacher={() => setCurrentView('teacher_auth')} />}
@@ -274,7 +270,7 @@
             );
         }
 
-        // --- TEACHER AUTH (Sandi Terlihat/Tersembunyi) ---
+        // --- TEACHER AUTH ---
         function TeacherAuth({ onAuthenticated, onCancel }) {
             const [password, setPassword] = useState('');
             const [showPassword, setShowPassword] = useState(false);
@@ -316,6 +312,8 @@
         function TeacherConsole({ onLogout, onBroadcast, broadcastData }) {
             const [mediaList, setMediaList] = useState([]);
             const [isUploading, setIsUploading] = useState(false);
+            const [errorMsg, setErrorMsg] = useState('');
+            const [deleteConfirmId, setDeleteConfirmId] = useState(null);
             
             const [previewMedia, setPreviewMedia] = useState(null);
             const [previewVrMode, setPreviewVrMode] = useState(false);
@@ -328,7 +326,7 @@
                 try {
                     const data = await supabaseApi('/films?title=neq.GLOBAL_LIVE_STATE&select=*&order=id.desc');
                     if (data) setMediaList(data);
-                } catch (err) { console.warn("Koneksi Supabase gagal."); }
+                } catch (err) { setErrorMsg("Koneksi Supabase gagal."); }
             };
 
             useEffect(() => { fetchMedia(); }, []);
@@ -337,6 +335,7 @@
                 const file = e.target.files[0];
                 if (!file) return;
                 setIsUploading(true);
+                setErrorMsg('');
                 try {
                     const fileExt = file.name.split('.').pop();
                     const fileName = `vid_${Date.now()}.${fileExt}`;
@@ -353,23 +352,26 @@
 
                     await supabaseApi('/films', { method: 'POST', body: JSON.stringify(newRecord) });
                     fetchMedia();
-                } catch (err) { alert("Upload gagal. Pastikan Bucket 'videos' sudah ada di Supabase."); } 
+                } catch (err) { setErrorMsg("Upload gagal. Cek pengaturan Supabase."); } 
                 finally { setIsUploading(false); }
             };
 
-            const handleDelete = async (id) => {
-                if(!window.confirm("Hapus film ini secara permanen?")) return;
-                try { await supabaseApi(`/films?id=eq.${id}`, { method: 'DELETE' }); fetchMedia(); } 
-                catch(err) { alert("Gagal menghapus."); }
+            const confirmDelete = async (id) => {
+                try { 
+                    await supabaseApi(`/films?id=eq.${id}`, { method: 'DELETE' }); 
+                    fetchMedia(); 
+                    setDeleteConfirmId(null);
+                } 
+                catch(err) { setErrorMsg("Gagal menghapus."); setDeleteConfirmId(null); }
             };
 
             const handlePreview = (media) => {
-                enterFullscreenAndLandscape(); // Beralih otomatis untuk Guru
+                enterFullscreenAndLandscape();
                 setPreviewMedia(media);
             };
 
             return (
-                <div className="w-full h-full flex flex-col bg-[#020617]">
+                <div className="w-full h-full flex flex-col bg-[#020617] relative">
                     <div className="glass-panel p-5 flex justify-between items-center z-10 border-b-0 rounded-b-2xl mx-4 mt-2">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-gradient-to-br from-eco-500 to-cyan-600 rounded-full flex items-center justify-center text-white shadow-[0_0_10px_rgba(16,185,129,0.4)]">
@@ -380,7 +382,9 @@
                         <button onClick={onLogout} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-lg text-sm hover:bg-red-500/20 font-semibold border border-red-500/30">Tutup Kendali</button>
                     </div>
                     
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+                        {errorMsg && <div className="mb-4 p-4 bg-red-500/20 text-red-300 rounded-xl border border-red-500">{errorMsg}</div>}
+                        
                         <div className="glass-panel rounded-3xl p-6 md:p-8">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 border-b border-white/10 pb-6">
                                 <div>
@@ -405,10 +409,21 @@
                                     {mediaList.map((media) => {
                                         const isLive = liveMediaId === media.id;
                                         return (
-                                            <div key={media.id} className={`glass-panel rounded-2xl overflow-hidden flex flex-col group transition-all ${isLive ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/10 hover:border-eco-500/50'}`}>
+                                            <div key={media.id} className={`glass-panel rounded-2xl overflow-hidden flex flex-col group transition-all relative ${isLive ? 'border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'border-white/10 hover:border-eco-500/50'}`}>
+                                                {/* Dialog Konfirmasi Hapus Inline */}
+                                                {deleteConfirmId === media.id && (
+                                                    <div className="absolute inset-0 bg-black/90 z-20 flex flex-col items-center justify-center p-4 text-center">
+                                                        <p className="text-white mb-4 text-sm">Hapus permanen?</p>
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => confirmDelete(media.id)} className="px-4 py-2 bg-red-600 rounded-lg text-white font-bold text-sm">Hapus</button>
+                                                            <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 bg-slate-600 rounded-lg text-white font-bold text-sm">Batal</button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 <div className="h-40 bg-black/60 relative flex items-center justify-center overflow-hidden border-b border-white/5">
                                                     <IconFilm />
-                                                    <button onClick={() => handleDelete(media.id)} className="absolute top-3 right-3 p-2 bg-black/80 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900 hover:text-white border border-red-500/30">
+                                                    <button onClick={() => setDeleteConfirmId(media.id)} className="absolute top-3 right-3 p-2 bg-black/80 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900 hover:text-white border border-red-500/30">
                                                         <IconTrash />
                                                     </button>
                                                     {isLive && (
@@ -436,7 +451,7 @@
                         </div>
                     </div>
 
-                    {/* MODAL PRATINJAU GURU (Menggunakan Player Utama tanpa Tombol Tutup) */}
+                    {/* MODAL PRATINJAU GURU */}
                     {previewMedia && (
                         <div className="fixed inset-0 z-50 bg-black flex flex-col">
                             <div className="flex-1 relative">
@@ -480,7 +495,6 @@
             const leftVideoRef = useRef(null);
             const rightVideoRef = useRef(null);
             
-            // Pertahanan jika Browser memblokir Auto-Play (Sangat sering terjadi di Siswa)
             const [showPlayFallback, setShowPlayFallback] = useState(false);
 
             useEffect(() => {
@@ -495,7 +509,7 @@
                             await Promise.all(p);
                             setShowPlayFallback(false);
                         } catch (e) { 
-                            console.log("Autoplay ditolak. Meminta interaksi manual dari siswa."); 
+                            console.log("Autoplay ditolak. Meminta interaksi manual dari pengguna."); 
                             setShowPlayFallback(true);
                         }
                     };
@@ -512,7 +526,9 @@
             };
             
             const forcePlay = () => {
-                enterFullscreenAndLandscape();
+                if (!document.fullscreenElement) {
+                    enterFullscreenAndLandscape();
+                }
                 if(leftVideoRef.current) leftVideoRef.current.play();
                 if(rightVideoRef.current) rightVideoRef.current.play();
                 setShowPlayFallback(false);
@@ -535,7 +551,7 @@
                         )}
                     </div>
                     
-                    {/* Fallback Jika Autoplay Diblokir Jaringan/Browser Siswa */}
+                    {/* Fallback Jika Autoplay Diblokir */}
                     {showPlayFallback && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
                             <button onClick={forcePlay} className="px-8 py-5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105 transition-transform text-white rounded-full font-bold text-xl shadow-[0_0_40px_rgba(6,182,212,0.8)] flex items-center gap-3 animate-pulse">
@@ -549,7 +565,7 @@
             );
         }
 
-        // --- 2. RUANG DEMO EKOSISTEM 360 (DIROBAK MENJADI SIANG HARI, RUMPUT & AWAN) ---
+        // --- 2. RUANG DEMO EKOSISTEM 360 ---
         function Ecosystem3DRoom({ vrMode, setVrMode, isMuted, setIsMuted, onExit }) {
             const containerRef = useRef(null);
 
@@ -559,12 +575,15 @@
                 const container = containerRef.current;
                 
                 const scene = new THREE.Scene();
-                // 1. LANGIT BIRU (Sky Blue)
+                // Langit Biru Cerah
                 scene.background = new THREE.Color(0x87CEEB);
-                scene.fog = new THREE.FogExp2(0x87CEEB, 0.003); // Kabut tipis menyatu dengan langit
+                scene.fog = new THREE.FogExp2(0x87CEEB, 0.003); 
 
                 const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
+                
+                // OPTIMISASI MOBILE: Membatasi pixel ratio agar HP tidak panas/lag
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
                 renderer.setSize(container.clientWidth, container.clientHeight);
                 container.appendChild(renderer.domElement);
 
@@ -574,54 +593,54 @@
                     stereoEffect.setSize(container.clientWidth, container.clientHeight);
                 }
 
-                // --- MEMBANGUN EKOSISTEM SIANG HARI ---
+                // --- MEMBANGUN EKOSISTEM SIANG HARI (Optimized Lambert Materials) ---
                 
-                // 2. TANAH & RUMPUT (Box Geometry untuk menampilkan sisi kedalaman tanah)
-                const groundGeo = new THREE.BoxGeometry(500, 20, 500); // Daratan yang luas dan tebal
+                // Tanah
+                const groundGeo = new THREE.BoxGeometry(500, 20, 500); 
                 const groundMaterials = [
-                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), // Sisi Coklat (Tanah)
-                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), 
-                    new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.8 }), // Atas Hijau (Rumput)
-                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), 
-                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), 
-                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 })  
+                    new THREE.MeshLambertMaterial({ color: 0x5c4033 }), 
+                    new THREE.MeshLambertMaterial({ color: 0x5c4033 }), 
+                    new THREE.MeshLambertMaterial({ color: 0x22c55e }), // Atas Hijau (Rumput)
+                    new THREE.MeshLambertMaterial({ color: 0x5c4033 }), 
+                    new THREE.MeshLambertMaterial({ color: 0x5c4033 }), 
+                    new THREE.MeshLambertMaterial({ color: 0x5c4033 })  
                 ];
                 const ground = new THREE.Mesh(groundGeo, groundMaterials);
-                ground.position.y = -20; // Posisikan di bawah kaki pengguna
+                ground.position.y = -20;
                 scene.add(ground);
 
-                // Tambahkan Ratusan Bilah Rumput (Cones kecil)
+                // Rumput (Optimized Count)
                 const grassGeo = new THREE.ConeGeometry(0.5, 3, 3);
-                const grassMat = new THREE.MeshStandardMaterial({ color: 0x16a34a });
-                for(let i=0; i<300; i++) {
+                const grassMat = new THREE.MeshLambertMaterial({ color: 0x16a34a });
+                for(let i=0; i<150; i++) {
                     const grass = new THREE.Mesh(grassGeo, grassMat);
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 10 + Math.random() * 150; // Jangan taruh rumput tepat di muka kamera
+                    const radius = 10 + Math.random() * 150; 
                     grass.position.set(Math.cos(angle)*radius, -10, Math.sin(angle)*radius);
                     grass.rotation.x = (Math.random() - 0.5) * 0.4;
                     grass.rotation.z = (Math.random() - 0.5) * 0.4;
                     scene.add(grass);
                 }
 
-                // 3. AWAN (Kumpulan Bola Volumetrik)
+                // Awan
                 const cloudGroup = new THREE.Group();
-                const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, transparent: true, opacity: 0.95 });
-                for(let i=0; i<20; i++) {
+                const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+                for(let i=0; i<15; i++) {
                     const cloud = new THREE.Group();
-                    const numPuffs = 3 + Math.floor(Math.random() * 4); // 3-6 kepulan per awan
+                    const numPuffs = 2 + Math.floor(Math.random() * 3); 
                     for(let j=0; j<numPuffs; j++) {
                         const puff = new THREE.Mesh(new THREE.SphereGeometry(10 + Math.random()*15, 8, 8), cloudMat);
                         puff.position.set((Math.random()-0.5)*20, (Math.random()-0.5)*10, (Math.random()-0.5)*20);
                         cloud.add(puff);
                     }
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 80 + Math.random() * 150; // Awan berada jauh di langit
+                    const radius = 80 + Math.random() * 150; 
                     cloud.position.set(Math.cos(angle)*radius, 50 + Math.random()*50, Math.sin(angle)*radius);
                     cloudGroup.add(cloud);
                 }
                 scene.add(cloudGroup);
 
-                // 4. IKON EKOSISTEM (Disebar melingkar 360)
+                // Ikon Ekosistem
                 const createIconSprite = (emoji, size) => {
                     const canvas = document.createElement('canvas');
                     canvas.width = 256; canvas.height = 256;
@@ -653,15 +672,15 @@
                     iconSprites.push(sprite);
                 }
 
-                // 5. TEKS 3D (Diposisikan di -Z / Depan Awal)
+                // Teks 3D (Aman Resolusi GPU)
                 const textCanvas = document.createElement('canvas');
-                textCanvas.width = 2048; // Resolusi diturunkan agar GPU HP kuat
+                textCanvas.width = 2048; 
                 textCanvas.height = 512;
                 const ctx = textCanvas.getContext('2d');
                 ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0,0,2048,512);
                 ctx.textAlign = 'center';
                 
-                ctx.font = 'bold 70px "Inter", sans-serif'; ctx.fillStyle = '#0f172a'; // Teks Gelap agar kontras dengan langit
+                ctx.font = 'bold 70px "Inter", sans-serif'; ctx.fillStyle = '#0f172a'; 
                 ctx.fillText('Selamat Datang, di ruang Virtual,', 1024, 200);
                 
                 ctx.font = '900 120px "Inter", sans-serif'; ctx.fillStyle = '#1e293b';
@@ -675,14 +694,14 @@
                 textSprite.position.set(0, 15, -60); 
                 scene.add(textSprite);
 
-                // Pencahayaan Siang Hari
-                scene.add(new THREE.AmbientLight(0xffffff, 0.8)); // Cahaya merata
-                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); // Matahari
+                // Cahaya Siang
+                scene.add(new THREE.AmbientLight(0xffffff, 0.8)); 
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); 
                 dirLight.position.set(100, 200, 50);
                 scene.add(dirLight);
 
-                // --- SISTEM KONTROL KAMERA ---
-                let lon = -90, lat = 0; // Mulai menghadap teks
+                // --- SISTEM KONTROL ---
+                let lon = -90, lat = 0; 
                 let isDragging = false;
                 let prev = { x:0, y:0 };
 
@@ -698,7 +717,6 @@
                 container.addEventListener('touchstart', onDown, {passive:false}); window.addEventListener('touchmove', onMove, {passive:false}); window.addEventListener('touchend', onUp);
 
                 let controls = null;
-                // Aktifkan Gyro otomatis karena siswa sudah mengklik tombol di halaman sebelumnya
                 if (THREE.DeviceOrientationControls) {
                     controls = new THREE.DeviceOrientationControls(camera);
                 }
@@ -710,8 +728,6 @@
                     const time = Date.now() * 0.001;
                     iconSprites.forEach((sprite, i) => { sprite.position.y += Math.sin(time + i) * 0.02; });
                     textSprite.position.y = 15 + Math.sin(time * 2) * 1.5;
-                    
-                    // Awan bergeser pelan
                     cloudGroup.rotation.y += 0.0005;
 
                     if (controls && controls.deviceOrientation && controls.deviceOrientation.alpha !== null) {
@@ -766,32 +782,62 @@
             );
         }
 
-        // --- KOMPONEN TOMBOL BAWAH ---
+        // --- KOMPONEN TOMBOL BAWAH (Smart Auto-Hide) ---
         function ControlsOverlay({ onExit, vrMode, setVrMode, isMuted, setIsMuted }) {
-            // Menambahkan dukungan Fullscreen toggle manual
             const [isFullscreen, setIsFullscreen] = useState(false);
+            const [isUiVisible, setIsUiVisible] = useState(true);
             
             useEffect(() => {
-                const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+                let timeout;
+                // Logika menyembunyikan UI otomatis jika dalam mode Fullscreen
+                const handleInteraction = () => {
+                    setIsUiVisible(true);
+                    clearTimeout(timeout);
+                    if (document.fullscreenElement || document.webkitFullscreenElement) {
+                        timeout = setTimeout(() => setIsUiVisible(false), 3000);
+                    }
+                };
+
+                const onFullscreenChange = () => {
+                    const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                    setIsFullscreen(isFull);
+                    handleInteraction(); 
+                };
+
                 document.addEventListener('fullscreenchange', onFullscreenChange);
-                return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+                document.addEventListener('webkitfullscreenchange', onFullscreenChange); 
+                document.addEventListener('mousemove', handleInteraction);
+                document.addEventListener('touchstart', handleInteraction);
+                document.addEventListener('click', handleInteraction);
+                
+                handleInteraction();
+
+                return () => {
+                    document.removeEventListener('fullscreenchange', onFullscreenChange);
+                    document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+                    document.removeEventListener('mousemove', handleInteraction);
+                    document.removeEventListener('touchstart', handleInteraction);
+                    document.removeEventListener('click', handleInteraction);
+                    clearTimeout(timeout);
+                };
             }, []);
 
             const toggleFullscreen = () => {
-                if (!document.fullscreenElement) {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                     enterFullscreenAndLandscape();
                 } else {
                     if (document.exitFullscreen) document.exitFullscreen().catch(e=>console.log(e));
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
                 }
             };
 
             return (
-                <div className="absolute inset-x-0 bottom-0 p-6 flex justify-between items-end z-40 pointer-events-none">
-                    <button onClick={onExit} className="px-5 py-3 bg-red-600/80 backdrop-blur hover:bg-red-500 text-white rounded-2xl font-bold shadow-lg border border-red-400/30 transition-colors pointer-events-auto text-sm md:text-base">
+                <div className={`absolute inset-x-0 bottom-0 p-6 flex justify-between items-end z-40 transition-opacity duration-500 ${isUiVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                    <button onClick={onExit} className="px-5 py-3 bg-red-600/80 backdrop-blur hover:bg-red-500 text-white rounded-2xl font-bold shadow-lg border border-red-400/30 transition-colors text-sm md:text-base">
                         ✕ Keluar
                     </button>
                     
-                    <div className="flex gap-3 pointer-events-auto">
+                    <div className="flex gap-3">
                         <button onClick={() => setIsMuted(!isMuted)} className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border text-white ${isMuted ? 'bg-red-600 border-red-500' : 'bg-blue-600 border-blue-400'}`}>
                             {isMuted ? <IconVolumeOff /> : <IconVolumeUp />}
                         </button>
@@ -799,7 +845,11 @@
                             <IconVR />
                         </button>
                         <button onClick={toggleFullscreen} className="w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border bg-black/50 border-white/20 text-slate-300 hover:bg-white/10">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                            {isFullscreen ? (
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
+                            ) : (
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                            )}
                         </button>
                     </div>
                 </div>
