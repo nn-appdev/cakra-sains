@@ -87,14 +87,16 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- ICONS (Standar UI & Fitur Baru Fullscreen) ---
+        // --- ICONS (Standar UI) ---
         const IconFilm = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>;
         const IconVR = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.52 7.15L15 4V3a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v18a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1l6.52-3.15a1 1 0 0 0 .48-.9V8.05a1 1 0 0 0-.48-.9z"></path><path d="M15 12v.01"></path><path d="M15 8v.01"></path><path d="M15 16v.01"></path></svg>;
         const IconTrash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
         const IconVolumeUp = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>;
         const IconVolumeOff = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="1" x2="1" y2="23"></line></svg>;
+        const IconPlay = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
         const IconFullscreen = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>;
-        const IconMinimize = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>;
+        const IconEyeOpen = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
+        const IconEyeClosed = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
         
         // --- ICONS EKOSISTEM ---
         const EcoEarth = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
@@ -102,7 +104,6 @@
         const EcoSunCloud = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="20" y1="5" x2="22" y2="6"/></svg>;
         const EcoBird = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/><path d="M9 10h.01M15 10h.01"/></svg>;
         const EcoFox = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="12 22 2 10 12 2 22 10 12 22"/><path d="M2 10l10 5 10-5"/></svg>;
-        const EcoWorm = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 12c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8-8-3.6-8-8z"/><path d="M4 12c0-2.2 1.8-4 4-4"/></svg>;
 
         // --- KONFIGURASI SUPABASE ---
         const SUPABASE_URL = "https://xltrmoeabasrconlhijv.supabase.co";
@@ -130,7 +131,6 @@
             const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
             if (rfs) {
                 rfs.call(el).then(() => {
-                    // Paksa layar menjadi Landscape jika perangkat mendukung (Mobile)
                     if (window.screen && screen.orientation && screen.orientation.lock) {
                         screen.orientation.lock('landscape').catch(e => console.log("Landscape lock diabaikan (mungkin desktop):", e));
                     }
@@ -144,33 +144,42 @@
             const [isMuted, setIsMuted] = useState(true);
             const [broadcastData, setBroadcastData] = useState(null);
 
-            // SISTEM SINKRONISASI REAL-TIME LINTAS PERANGKAT (Menggunakan Polling ke Storage)
+            // --- SISTEM SINKRONISASI REAL-TIME (BYPASS STORAGE UNTUK ANTI-GAGAL) ---
             useEffect(() => {
                 let interval;
+                // Polling aktif saat di Ruang Siswa (termasuk ruang demo 3D) untuk menunggu siaran
                 if (currentView === 'player') {
-                    // Cek status siaran global dari Supabase setiap 3 detik
                     interval = setInterval(async () => {
                         try {
-                            const res = await fetch(`${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/live_state.json?t=${Date.now()}`);
+                            // Cek perintah siaran langsung dari Tabel Films, mengabaikan kebijakan Storage
+                            const res = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=url`, {
+                                headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                            });
                             if (res.ok) {
                                 const data = await res.json();
-                                setBroadcastData(prev => {
-                                    // Update hanya jika ada siaran baru yang lebih segar
-                                    if (!prev || data.timestamp > prev.timestamp) {
-                                        return data;
-                                    }
-                                    return prev;
-                                });
+                                if (data && data.length > 0) {
+                                    const parsedPayload = JSON.parse(data[0].url);
+                                    setBroadcastData(prev => {
+                                        // Update jika ada stempel waktu baru
+                                        if (!prev || parsedPayload.timestamp > prev.timestamp) {
+                                            return parsedPayload;
+                                        }
+                                        return prev;
+                                    });
+                                } else {
+                                    // Jika tidak ada data live, reset
+                                    setBroadcastData(null);
+                                }
                             }
                         } catch (e) {
-                            // Abaikan error jaringan saat polling
+                            // Abaikan error jaringan sesaat
                         }
-                    }, 3000);
+                    }, 2500); // Sinkronisasi setiap 2.5 detik
                 }
                 return () => clearInterval(interval);
             }, [currentView]);
 
-            // Sinkronisasi Tab Lokal (Cadangan)
+            // Sinkronisasi Tab Lokal (Untuk Pratinjau Cepat)
             useEffect(() => {
                 const handleStorageChange = (e) => {
                     if (e.key === 'cakra_broadcast' && e.newValue) {
@@ -181,46 +190,49 @@
                 return () => window.removeEventListener('storage', handleStorageChange);
             }, []);
 
-            // FUNGSI GURU UNTUK MENYIARKAN KE SEMUA SISWA DI PERANGKAT MANA PUN
-            const simulateBroadcastToStudent = async (media) => {
-                const payload = media ? { type: 'video', data: media, timestamp: Date.now() } : { type: 'scene', data: null, timestamp: Date.now() };
+            // FUNGSI GURU UNTUK MENYIARKAN KE SELURUH SISWA (Via Database Tabel)
+            const simulateBroadcastToStudent = (media) => {
+                const payload = media ? { type: 'video', data: media, timestamp: Date.now() } : null;
                 
                 // 1. Update Layar Guru (Lokal)
                 setBroadcastData(payload);
-                localStorage.setItem('cakra_broadcast', JSON.stringify(payload));
-                window.dispatchEvent(new StorageEvent('storage', { key: 'cakra_broadcast', newValue: JSON.stringify(payload) }));
+                localStorage.setItem('cakra_broadcast', JSON.stringify(payload || {}));
+                window.dispatchEvent(new StorageEvent('storage', { key: 'cakra_broadcast', newValue: JSON.stringify(payload || {}) }));
 
-                // 2. Update Status Siaran Global ke Supabase (Sinkronisasi Antar HP Siswa)
-                try {
-                    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-                    await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/live_state.json`, {
-                        method: 'POST', // POST digunakan untuk membuat/menimpa
-                        headers: {
-                            'apikey': SUPABASE_KEY,
-                            'Authorization': `Bearer ${SUPABASE_KEY}`,
-                            'Content-Type': 'application/json',
-                            'x-upsert': 'true' // WAJIB untuk menimpa file lama
-                        },
-                        body: blob
-                    });
-                } catch (err) {
-                    console.error("Sinkronisasi Global Gagal. RLS bucket videos mungkin belum mengizinkan UPDATE.", err);
+                // 2. Tembak Perintah ke Database Utama (Pasti Masuk)
+                if (payload) {
+                    const stateRecord = { title: 'GLOBAL_LIVE_STATE', format: 'SYSTEM_SYNC', is_video: false, url: JSON.stringify(payload) };
+                    // Hapus yang lama, masukkan yang baru (Simulasi Upsert yang aman)
+                    fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE`, {
+                        method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                    }).then(() => {
+                        fetch(`${SUPABASE_URL}/rest/v1/films`, {
+                            method: 'POST', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify(stateRecord)
+                        });
+                    }).catch(err => console.log("Gagal memancarkan siaran", err));
+                } else {
+                    // Hentikan Siaran
+                    fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE`, {
+                        method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                    }).catch(e => {});
                 }
             };
 
             return (
                 <div className="w-full h-screen text-white font-sans overflow-hidden selection:bg-cyan-500/30 bg-[#020617]">
                     {currentView === 'landing' && <LandingScreen onEnterStudent={() => { 
-                        enterFullscreenAndLandscape(); // Langsung Fullscreen & Landscape!
+                        enterFullscreenAndLandscape(); // Auto-Landscape
                         setVrMode(true); 
                         setCurrentView('player'); 
-                    }} onEnterTeacher={() => setCurrentView('teacher')} />}
+                    }} onEnterTeacher={() => setCurrentView('teacher_auth')} />}
                     
                     {currentView === 'player' && <MasterPlayer vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} onExit={() => { 
                         setCurrentView('landing'); 
-                        setBroadcastData(null); 
                         if(document.exitFullscreen) document.exitFullscreen().catch(e=>console.log(e));
                     }} broadcastData={broadcastData} />}
+                    
+                    {currentView === 'teacher_auth' && <TeacherAuth onAuthenticated={() => setCurrentView('teacher')} onCancel={() => setCurrentView('landing')} />}
                     
                     {currentView === 'teacher' && <TeacherConsole onLogout={() => setCurrentView('landing')} onBroadcast={simulateBroadcastToStudent} broadcastData={broadcastData} />}
                 </div>
@@ -265,15 +277,50 @@
             );
         }
 
+        // --- TEACHER AUTH (Dengan Toggle Mata Sandi) ---
+        function TeacherAuth({ onAuthenticated, onCancel }) {
+            const [password, setPassword] = useState('');
+            const [showPassword, setShowPassword] = useState(false);
+            const [error, setError] = useState('');
+            
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (password === 'cakra-sains') onAuthenticated();
+                else { setError('Sandi salah.'); setPassword(''); }
+            };
+            
+            return (
+                <div className="relative w-full h-full flex flex-col items-center justify-center p-6 bg-[#020617]">
+                    <button onClick={onCancel} className="absolute top-6 right-6 px-4 py-2 glass-panel rounded-full text-sm">Batal</button>
+                    <form onSubmit={handleSubmit} className="glass-panel p-8 rounded-3xl max-w-sm w-full text-center">
+                        <div className="w-16 h-16 bg-gradient-to-br from-eco-500 to-cyan-600 text-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_15px_rgba(16,185,129,0.5)]"><IconFilm /></div>
+                        <h2 className="text-2xl font-bold mb-6">Akses Guru</h2>
+                        <div className="relative mb-4">
+                            <input 
+                                type={showPassword ? "text" : "password"} 
+                                value={password} 
+                                onChange={(e) => { setPassword(e.target.value); setError(''); }} 
+                                placeholder="Masukkan Sandi" 
+                                className="w-full bg-black/40 border border-white/20 rounded-xl px-4 py-3 text-center outline-none text-white focus:border-eco-400 transition-colors" 
+                                autoFocus 
+                            />
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-white transition-colors">
+                                {showPassword ? <IconEyeClosed /> : <IconEyeOpen />}
+                            </button>
+                        </div>
+                        {error && <p className="text-red-400 text-xs mb-4">{error}</p>}
+                        <button type="submit" className="w-full py-3 bg-gradient-to-r from-eco-600 to-cyan-600 rounded-xl font-bold shadow-lg hover:opacity-90">Masuk</button>
+                    </form>
+                </div>
+            );
+        }
+
         // --- TEACHER CONSOLE ---
         function TeacherConsole({ onLogout, onBroadcast, broadcastData }) {
             const [mediaList, setMediaList] = useState([]);
             const [isUploading, setIsUploading] = useState(false);
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [password, setPassword] = useState('');
-            const [showPassword, setShowPassword] = useState(false); // Fitur Lihat Sandi
-            const [previewMedia, setPreviewMedia] = useState(null);
             
+            const [previewMedia, setPreviewMedia] = useState(null);
             const [previewVrMode, setPreviewVrMode] = useState(false);
             const [previewIsMuted, setPreviewIsMuted] = useState(true);
 
@@ -282,18 +329,13 @@
 
             const fetchMedia = async () => {
                 try {
-                    const data = await supabaseApi('/films?select=*&order=id.desc');
+                    // Sembunyikan baris state sistem agar tidak mengotori perpustakaan
+                    const data = await supabaseApi('/films?title=neq.GLOBAL_LIVE_STATE&select=*&order=id.desc');
                     if (data) setMediaList(data);
                 } catch (err) { console.warn("Koneksi Supabase gagal."); }
             };
 
-            useEffect(() => { if (isAuthenticated) fetchMedia(); }, [isAuthenticated]);
-
-            const handleLogin = (e) => {
-                e.preventDefault();
-                if (password === 'cakra-sains') setIsAuthenticated(true);
-                else alert('Sandi salah!');
-            };
+            useEffect(() => { fetchMedia(); }, []);
 
             const handleFileChange = async (e) => {
                 const file = e.target.files[0];
@@ -315,7 +357,7 @@
 
                     await supabaseApi('/films', { method: 'POST', body: JSON.stringify(newRecord) });
                     fetchMedia();
-                } catch (err) { alert("Upload gagal."); } 
+                } catch (err) { alert("Upload gagal. Pastikan Bucket 'videos' sudah ada di Supabase."); } 
                 finally { setIsUploading(false); }
             };
 
@@ -325,31 +367,10 @@
                 catch(err) { alert("Gagal menghapus."); }
             };
 
-            if (!isAuthenticated) {
-                return (
-                    <div className="w-full h-full flex items-center justify-center p-6 bg-[#020617]">
-                        <button onClick={onLogout} className="absolute top-6 right-6 px-4 py-2 glass-panel rounded-full text-sm">Batal</button>
-                        <form onSubmit={handleLogin} className="glass-panel p-8 rounded-3xl max-w-sm w-full text-center">
-                            <div className="w-16 h-16 bg-gradient-to-br from-eco-500 to-cyan-600 text-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_15px_rgba(16,185,129,0.5)]"><IconFilm /></div>
-                            <h2 className="text-2xl font-bold mb-6">Akses Guru</h2>
-                            <div className="relative mb-4">
-                                <input 
-                                    type={showPassword ? "text" : "password"} 
-                                    value={password} 
-                                    onChange={(e) => setPassword(e.target.value)} 
-                                    placeholder="Masukkan Sandi" 
-                                    className="w-full bg-black/40 border border-white/20 rounded-xl px-4 py-3 text-center outline-none text-white focus:border-eco-400 transition-colors" 
-                                    autoFocus 
-                                />
-                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-white transition-colors">
-                                    {showPassword ? <IconEyeClosed /> : <IconEyeOpen />}
-                                </button>
-                            </div>
-                            <button type="submit" className="w-full py-3 bg-gradient-to-r from-eco-600 to-cyan-600 rounded-xl font-bold shadow-lg hover:opacity-90">Masuk</button>
-                        </form>
-                    </div>
-                );
-            }
+            const handlePreview = (media) => {
+                enterFullscreenAndLandscape();
+                setPreviewMedia(media);
+            };
 
             return (
                 <div className="w-full h-full flex flex-col bg-[#020617]">
@@ -368,7 +389,7 @@
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 border-b border-white/10 pb-6">
                                 <div>
                                     <h3 className="text-3xl font-bold text-white mb-1">Pustaka Media</h3>
-                                    <p className="text-slate-400 text-sm font-medium">Pilih materi untuk disiarkan serentak ke seluruh perangkat siswa.</p>
+                                    <p className="text-slate-400 text-sm font-medium">Klik "Siarkan" untuk memutar sinkron di semua HP siswa.</p>
                                 </div>
                                 <div className="flex gap-3">
                                     <button onClick={fetchMedia} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-semibold">🔄 Refresh</button>
@@ -403,14 +424,11 @@
                                                 <div className="p-5 flex-1 flex flex-col bg-black/20">
                                                     <h4 className="font-bold text-lg mb-4 line-clamp-2 text-white">{media.title}</h4>
                                                     <div className="flex gap-2 mt-auto">
-                                                        <button onClick={() => {
-                                                            enterFullscreenAndLandscape();
-                                                            setPreviewMedia(media);
-                                                        }} className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold border border-white/10 transition-colors">
+                                                        <button onClick={() => handlePreview(media)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold border border-white/10 transition-colors">
                                                             Pratinjau
                                                         </button>
                                                         <button onClick={() => onBroadcast(isLive ? null : media)} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all border ${isLive ? 'bg-red-600/20 text-red-400 border-red-500/50' : 'bg-gradient-to-r from-eco-600 to-cyan-600 text-white border-transparent shadow-lg'}`}>
-                                                            {isLive ? 'Hentikan Siaran' : '▶ Siarkan ke Siswa'}
+                                                            {isLive ? 'Hentikan Siaran' : '▶ Siarkan'}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -422,7 +440,7 @@
                         </div>
                     </div>
 
-                    {/* MODAL PRATINJAU GURU */}
+                    {/* MODAL PRATINJAU GURU YANG TERISOLASI */}
                     {previewMedia && (
                         <div className="fixed inset-0 z-50 bg-black flex flex-col">
                             <div className="flex-1 relative">
@@ -446,7 +464,7 @@
             );
         }
 
-        // --- MASTER PLAYER ---
+        // --- MASTER PLAYER (Siswa) ---
         function MasterPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, broadcastData }) {
             const hasVideo = broadcastData?.type === 'video' && broadcastData?.data?.url;
 
@@ -465,6 +483,9 @@
         function HTMLVideoVRPlayer({ vrMode, setVrMode, isMuted, setIsMuted, onExit, videoUrl }) {
             const leftVideoRef = useRef(null);
             const rightVideoRef = useRef(null);
+            
+            // Pertahanan jika Browser memblokir Auto-Play (Sangat sering terjadi di Siswa)
+            const [showPlayFallback, setShowPlayFallback] = useState(false);
 
             useEffect(() => {
                 if (leftVideoRef.current) {
@@ -476,7 +497,11 @@
                             const p = [leftVideoRef.current.play()];
                             if(rightVideoRef.current) p.push(rightVideoRef.current.play());
                             await Promise.all(p);
-                        } catch (e) { console.log("Autoplay ditolak. Butuh interaksi pengguna."); }
+                            setShowPlayFallback(false);
+                        } catch (e) { 
+                            console.log("Autoplay ditolak. Meminta interaksi manual dari siswa."); 
+                            setShowPlayFallback(true);
+                        }
                     };
                     playVideos();
                 }
@@ -488,6 +513,13 @@
                         rightVideoRef.current.currentTime = leftVideoRef.current.currentTime;
                     }
                 }
+            };
+            
+            const forcePlay = () => {
+                enterFullscreenAndLandscape();
+                if(leftVideoRef.current) leftVideoRef.current.play();
+                if(rightVideoRef.current) rightVideoRef.current.play();
+                setShowPlayFallback(false);
             };
 
             return (
@@ -506,12 +538,22 @@
                             </div>
                         )}
                     </div>
+                    
+                    {/* Fallback Jika Autoplay Diblokir Jaringan/Browser Siswa */}
+                    {showPlayFallback && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+                            <button onClick={forcePlay} className="px-8 py-5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105 transition-transform text-white rounded-full font-bold text-xl shadow-[0_0_40px_rgba(6,182,212,0.8)] flex items-center gap-3 animate-pulse">
+                                <IconPlay /> KLIK UNTUK MEMUTAR SIARAN
+                            </button>
+                        </div>
+                    )}
+
                     <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} />
                 </div>
             );
         }
 
-        // --- 2. RUANG DEMO EKOSISTEM 360 ---
+        // --- 2. RUANG DEMO EKOSISTEM 360 (Diperbaiki Teks & Kedalaman Ruang) ---
         function Ecosystem3DRoom({ vrMode, setVrMode, isMuted, setIsMuted, onExit }) {
             const containerRef = useRef(null);
 
@@ -525,8 +567,6 @@
                 scene.fog = new THREE.FogExp2(0x021008, 0.02);
 
                 const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-                camera.position.set(0, 0, 0);
-
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(container.clientWidth, container.clientHeight);
                 container.appendChild(renderer.domElement);
@@ -537,16 +577,12 @@
                     stereoEffect.setSize(container.clientWidth, container.clientHeight);
                 }
 
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission().catch(console.error);
-                }
-
-                // Grid Bawah
+                // Grid Bawah untuk Kedalaman Spasial (Penting agar tidak terlihat hijau blank)
                 const gridHelper = new THREE.GridHelper(300, 60, 0x10b981, 0x064e3b);
                 gridHelper.position.y = -15;
                 scene.add(gridHelper);
 
-                // Starfield Kedalaman Ruang
+                // Starfield (Agar putaran 360 terasa)
                 const starGeo = new THREE.BufferGeometry();
                 const starVerts = [];
                 for(let i=0; i<1500; i++) starVerts.push((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*300);
@@ -554,7 +590,7 @@
                 const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0x34d399, size: 0.8, transparent: true, opacity: 0.6}));
                 scene.add(stars);
 
-                // Ikon Ekosistem (Tersebar 360 Derajat Penuh)
+                // Ikon Ekosistem (Tersebar 360 Derajat Penuh, Bukan Ngumpul di Satu Titik)
                 const createIconSprite = (emoji, size) => {
                     const canvas = document.createElement('canvas');
                     canvas.width = 256; canvas.height = 256;
@@ -586,7 +622,7 @@
                     iconSprites.push(sprite);
                 }
 
-                // Teks 3D Resolusi Aman (2048x512)
+                // Teks 3D Resolusi Aman (2048x512) - Menghindari Crash di HP
                 const textCanvas = document.createElement('canvas');
                 textCanvas.width = 2048; 
                 textCanvas.height = 512;
@@ -682,7 +718,7 @@
                     
                     <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                         <div className="bg-black/50 text-white px-6 py-2 rounded-full border border-white/10 text-xs md:text-sm font-bold animate-pulse backdrop-blur whitespace-nowrap">
-                            Menunggu Siaran Film... (Geser Layar / Putar HP)
+                            Menunggu Siaran Film dari Guru... (Geser Layar / Putar HP)
                         </div>
                     </div>
 
@@ -693,8 +729,9 @@
 
         // --- KOMPONEN TOMBOL BAWAH ---
         function ControlsOverlay({ onExit, vrMode, setVrMode, isMuted, setIsMuted }) {
+            // Menambahkan dukungan Fullscreen toggle manual jika diperlukan
             const [isFullscreen, setIsFullscreen] = useState(false);
-
+            
             useEffect(() => {
                 const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
                 document.addEventListener('fullscreenchange', onFullscreenChange);
@@ -705,12 +742,7 @@
                 if (!document.fullscreenElement) {
                     enterFullscreenAndLandscape();
                 } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen().catch(e=>console.log(e));
-                        if (window.screen && screen.orientation && screen.orientation.unlock) {
-                            screen.orientation.unlock();
-                        }
-                    }
+                    if (document.exitFullscreen) document.exitFullscreen().catch(e=>console.log(e));
                 }
             };
 
@@ -727,8 +759,9 @@
                         <button onClick={() => setVrMode(!vrMode)} className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border ${vrMode ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-black/50 border-white/20 text-slate-300 hover:bg-white/10'}`}>
                             <IconVR />
                         </button>
+                        {/* Tombol Ekstra Layar Penuh Sesuai Perintah */}
                         <button onClick={toggleFullscreen} className="w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border bg-black/50 border-white/20 text-slate-300 hover:bg-white/10">
-                            {isFullscreen ? <IconMinimize /> : <IconFullscreen />}
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
                         </button>
                     </div>
                 </div>
