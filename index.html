@@ -447,19 +447,40 @@
                         {vrMode && (
                             <div className="vr-lens-container w-1/2 border-l-2 border-slate-900/50">
                                 <div className="vr-lens-mask">
-                                    <video ref={rightVideoRef} src={videoUrl} className="vr-video" playsInline muted loop />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} />
-                </div>
-            );
-        }
-
-        // --- 2. RUANG DEMO EKOSISTEM 360 (Three.js WebGL Anti-Green Diperkuat) ---
+        // --- 2. RUANG DEMO EKOSISTEM 360 (Three.js WebGL Murni - Anti Blank Mobile) ---
         function Ecosystem3DRoom({ vrMode, setVrMode, isMuted, setIsMuted, onExit }) {
             const containerRef = useRef(null);
+            const [isUiVisible, setIsUiVisible] = useState(true);
+
+            // Auto-hide UI Logic
+            useEffect(() => {
+                let timeout;
+                const resetTimer = () => {
+                    setIsUiVisible(true);
+                    clearTimeout(timeout);
+                    if (document.fullscreenElement || document.webkitFullscreenElement) {
+                        timeout = setTimeout(() => setIsUiVisible(false), 3000);
+                    }
+                };
+
+                window.addEventListener('mousemove', resetTimer);
+                window.addEventListener('touchstart', resetTimer);
+                window.addEventListener('click', resetTimer);
+                document.addEventListener('fullscreenchange', resetTimer);
+                document.addEventListener('webkitfullscreenchange', resetTimer);
+
+                // Initial hide if already fullscreen
+                resetTimer();
+
+                return () => {
+                    window.removeEventListener('mousemove', resetTimer);
+                    window.removeEventListener('touchstart', resetTimer);
+                    window.removeEventListener('click', resetTimer);
+                    document.removeEventListener('fullscreenchange', resetTimer);
+                    document.removeEventListener('webkitfullscreenchange', resetTimer);
+                    clearTimeout(timeout);
+                };
+            }, []);
 
             useEffect(() => {
                 if (!containerRef.current || !window.THREE) return;
@@ -467,15 +488,17 @@
                 const container = containerRef.current;
                 
                 const scene = new THREE.Scene();
-                // PAKSA WARNA LATAR BELAKANG HITAM PEKAT UNTUK MENGHINDARI BLANK HIJAU
-                scene.background = new THREE.Color(0x000000);
-                scene.fog = new THREE.FogExp2(0x000000, 0.015);
+                // Mengubah latar menjadi HITAM kosmik, bukan hijau. 
+                // Jika GPU Mobile telat merender, layar akan hitam (natural), bukan hijau rusak.
+                scene.background = new THREE.Color(0x020617); 
+                scene.fog = new THREE.FogExp2(0x020617, 0.02);
 
                 const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
                 camera.position.set(0, 0, 0);
 
-                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-                renderer.setClearColor(0x000000, 1);
+                // Optimasi Rendering Mobile (Pixel Ratio Cap)
+                const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Mencegah crash resolusi di iOS
                 renderer.setSize(container.clientWidth, container.clientHeight);
                 container.appendChild(renderer.domElement);
 
@@ -485,16 +508,19 @@
                     stereoEffect.setSize(container.clientWidth, container.clientHeight);
                 }
 
+                // Permintaan izin Gyro (Dijalankan saat komponen dirender)
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                     DeviceOrientationEvent.requestPermission().catch(console.error);
                 }
 
-                // Grid Bawah
+                // --- MEMBANGUN EKOSISTEM (Tanpa Pencahayaan / Unlit Materials) ---
+                
+                // 1. Grid Lantai Virtual (Paling aman untuk semua GPU Mobile)
                 const gridHelper = new THREE.GridHelper(300, 60, 0x10b981, 0x064e3b);
                 gridHelper.position.y = -15;
                 scene.add(gridHelper);
 
-                // Bintang
+                // 2. Starfield (Titik-titik Bintang 360)
                 const starGeo = new THREE.BufferGeometry();
                 const starVerts = [];
                 for(let i=0; i<1500; i++) {
@@ -504,13 +530,14 @@
                 const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0x34d399, size: 0.8, transparent: true, opacity: 0.6}));
                 scene.add(stars);
 
-                // Ikon Ekosistem
-                const createIconSprite = (emoji, size) => {
+                // 3. Ikon Ekosistem (Canvas Sprite) - Disebar 360 derajat
+                const createIconSprite = (emoji, size, yPos) => {
                     const canvas = document.createElement('canvas');
                     canvas.width = 256; canvas.height = 256;
                     const ctx = canvas.getContext('2d');
                     ctx.font = '120px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                     ctx.shadowColor = '#10b981'; ctx.shadowBlur = 20; 
+                    ctx.fillStyle = '#ffffff';
                     ctx.fillText(emoji, 128, 128);
                     
                     const tex = new THREE.CanvasTexture(canvas);
@@ -524,18 +551,22 @@
                 const iconSprites = [];
                 for(let i=0; i<60; i++) {
                     const icon = icons[Math.floor(Math.random() * icons.length)];
-                    const sprite = createIconSprite(icon, 15);
+                    
+                    // Rumus lingkaran 360
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 40 + Math.random() * 60;
+                    const radius = 40 + Math.random() * 60; // 40-100 meter dari kamera
+                    
                     const x = Math.cos(angle) * radius;
                     const z = Math.sin(angle) * radius;
                     const yPos = (icon === '🦅' || icon === '☀️' || icon === '☁️') ? 15 + Math.random()*20 : (icon === '🐛' || icon === '🌳') ? -10 : 5;
+                    
+                    const sprite = createIconSprite(icon, 15, yPos);
                     sprite.position.set(x, yPos, z);
                     scene.add(sprite);
                     iconSprites.push(sprite);
                 }
 
-                // Teks 3D Skala Aman GPU (2048px agar tidak crash di mobile)
+                // 4. TEKS 3D RESOLUSI AMAN (2048x512) agar tidak crash di HP
                 const textCanvas = document.createElement('canvas');
                 textCanvas.width = 2048; 
                 textCanvas.height = 512;
@@ -543,35 +574,32 @@
                 ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0,0,2048,512);
                 ctx.textAlign = 'center';
                 
-                ctx.font = 'bold 60px "Inter", sans-serif'; ctx.fillStyle = '#6ee7b7';
-                ctx.fillText('Selamat Datang, di ruang Virtual,', 1024, 180);
+                ctx.font = 'bold 80px "Inter", sans-serif'; ctx.fillStyle = '#6ee7b7';
+                ctx.fillText('Selamat Datang, di ruang Virtual,', 1024, 200);
                 
-                ctx.font = '900 110px "Inter", sans-serif'; ctx.fillStyle = '#ffffff';
+                ctx.font = '900 150px "Inter", sans-serif'; ctx.fillStyle = '#ffffff';
                 ctx.shadowColor = '#10b981'; ctx.shadowBlur = 20;
-                ctx.fillText('CAKRA-SAINS', 1024, 320);
+                ctx.fillText('CAKRA-SAINS', 1024, 380);
 
                 const textTex = new THREE.CanvasTexture(textCanvas);
                 textTex.needsUpdate = true;
                 const textSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex, transparent: true }));
-                textSprite.scale.set(120, 30, 1); 
-                textSprite.position.set(0, 8, -45); 
+                // Skala rasio 4:1
+                textSprite.scale.set(160, 40, 1); 
+                textSprite.position.set(0, 10, -60); // Diam di depan (-Z)
                 scene.add(textSprite);
 
-                scene.add(new THREE.AmbientLight(0xffffff, 1));
-
-                let lon = -90, lat = 0;
+                // --- SISTEM KONTROL KAMERA ---
+                let lon = -90, lat = 0; // Default menghadap Teks
                 let isDragging = false;
                 let prev = { x:0, y:0 };
 
                 const onDown = (e) => { isDragging = true; prev = { x: e.touches?.[0].clientX || e.clientX, y: e.touches?.[0].clientY || e.clientY }; };
-                const onUp = () => { isDragging = false; };
+                const onUp = () => isDragging = false;
                 const onMove = (e) => {
                     if(!isDragging) return;
-                    const x = e.touches?.[0].clientX || e.clientX;
-                    const y = e.touches?.[0].clientY || e.clientY;
-                    lon -= (x - prev.x) * 0.2; 
-                    lat += (y - prev.y) * 0.2; 
-                    lat = Math.max(-85, Math.min(85, lat));
+                    const x = e.touches?.[0].clientX || e.clientX, y = e.touches?.[0].clientY || e.clientY;
+                    lon -= (x - prev.x) * 0.2; lat += (y - prev.y) * 0.2; lat = Math.max(-85, Math.min(85, lat));
                     prev = { x, y };
                 };
                 container.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
@@ -588,18 +616,15 @@
                     
                     const time = Date.now() * 0.001;
                     iconSprites.forEach((sprite, i) => { sprite.position.y += Math.sin(time + i) * 0.02; });
-                    textSprite.position.y = 8 + Math.sin(time * 2) * 1;
+                    textSprite.position.y = 10 + Math.sin(time * 2) * 1.5;
 
+                    // Rotasi Gyroscope vs Manual
                     if (controls && controls.deviceOrientation && controls.deviceOrientation.alpha !== null) {
                         controls.update(); 
                     } else {
                         const phi = THREE.MathUtils.degToRad(90 - lat);
                         const theta = THREE.MathUtils.degToRad(lon);
-                        camera.lookAt(
-                            camera.position.x + 100 * Math.sin(phi) * Math.cos(theta),
-                            camera.position.y + 100 * Math.cos(phi),
-                            camera.position.z + 100 * Math.sin(phi) * Math.sin(theta)
-                        );
+                        camera.lookAt(100 * Math.sin(phi) * Math.cos(theta), 100 * Math.cos(phi), 100 * Math.sin(phi) * Math.sin(theta));
                     }
 
                     if (stereoEffect) stereoEffect.render(scene, camera);
@@ -631,64 +656,39 @@
                     <div ref={containerRef} className="absolute inset-0 cursor-move"></div>
                     {vrMode && <div className="absolute top-0 bottom-0 left-1/2 w-1 bg-black/80 z-10 shadow-[0_0_15px_rgba(0,0,0,1)]"></div>}
                     
-                    <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                    {/* Pesan Teks (Hanya tampil saat UI tidak disembunyikan Fullscreen) */}
+                    <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-opacity duration-500 ${isUiVisible ? 'opacity-100' : 'opacity-0'}`}>
                         <div className="bg-black/50 text-white px-6 py-2 rounded-full border border-white/10 text-xs md:text-sm font-bold animate-pulse backdrop-blur whitespace-nowrap">
                             Menunggu Siaran Film dari Guru... (Putar HP Anda)
                         </div>
                     </div>
 
-                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} />
+                    <ControlsOverlay onExit={onExit} vrMode={vrMode} setVrMode={setVrMode} isMuted={isMuted} setIsMuted={setIsMuted} isUiVisible={isUiVisible} />
                 </div>
             );
         }
 
-        // --- KOMPONEN TOMBOL BAWAH DENGAN FULLSCREEN AUTO-HIDE ---
-        function ControlsOverlay({ onExit, vrMode, setVrMode, isMuted, setIsMuted }) {
-            const [isUiVisible, setIsUiVisible] = useState(true);
-
-            useEffect(() => {
-                let timeout;
-                const handleUserInteraction = () => {
-                    setIsUiVisible(true);
-                    clearTimeout(timeout);
-                    if (document.fullscreenElement || document.webkitFullscreenElement) {
-                        timeout = setTimeout(() => setIsUiVisible(false), 3000);
-                    }
-                };
-
-                window.addEventListener('mousemove', handleUserInteraction);
-                window.addEventListener('touchstart', handleUserInteraction);
-                window.addEventListener('click', handleUserInteraction);
-
-                return () => {
-                    window.removeEventListener('mousemove', handleUserInteraction);
-                    window.removeEventListener('touchstart', handleUserInteraction);
-                    window.removeEventListener('click', handleUserInteraction);
-                    clearTimeout(timeout);
-                };
-            }, []);
-
-            const toggleFullscreen = () => {
+        // --- KOMPONEN TOMBOL BAWAH ---
+        function ControlsOverlay({ onExit, vrMode, setVrMode, isMuted, setIsMuted, isUiVisible = true }) {
+            const handleFullscreen = () => {
+                const elem = document.documentElement;
                 if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                    const el = document.documentElement;
-                    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-                    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-                    
-                    if (screen.orientation && screen.orientation.lock) {
-                        screen.orientation.lock('landscape').catch(() => {});
+                    if (elem.requestFullscreen) {
+                        elem.requestFullscreen().catch(err => console.log("Layar Penuh ditolak browser."));
+                    } else if (elem.webkitRequestFullscreen) {
+                        elem.webkitRequestFullscreen(); // Safari iOS/Mobile fallback
                     }
                 } else {
-                    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-                    
-                    if (screen.orientation && screen.orientation.unlock) {
-                        screen.orientation.unlock();
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
                     }
                 }
             };
 
             return (
-                <div className={`absolute inset-x-0 bottom-0 p-6 flex justify-between items-end z-40 pointer-events-none auto-hide-ui ${isUiVisible ? '' : 'ui-hidden'}`}>
+                <div className={`absolute inset-x-0 bottom-0 p-6 flex justify-between items-end z-40 pointer-events-none transition-opacity duration-500 ${isUiVisible ? 'opacity-100' : 'opacity-0'}`}>
                     <button onClick={onExit} className="px-5 py-3 bg-red-600/80 backdrop-blur hover:bg-red-500 text-white rounded-2xl font-bold shadow-lg border border-red-400/30 transition-colors pointer-events-auto text-sm md:text-base">
                         ✕ Keluar
                     </button>
@@ -700,8 +700,8 @@
                         <button onClick={() => setVrMode(!vrMode)} className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border ${vrMode ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-black/50 border-white/20 text-slate-300 hover:bg-white/10'}`}>
                             <IconVR />
                         </button>
-                        <button onClick={toggleFullscreen} className="w-12 h-12 md:w-14 md:h-14 bg-black/50 border border-white/20 rounded-2xl flex items-center justify-center text-slate-300 hover:bg-white/10 backdrop-blur shadow-lg">
-                            <IconFullscreen />
+                        <button onClick={handleFullscreen} className="w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border bg-black/50 border-white/20 text-slate-300 hover:bg-white/10">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
                         </button>
                     </div>
                 </div>
