@@ -144,42 +144,43 @@
             const [isMuted, setIsMuted] = useState(true);
             const [broadcastData, setBroadcastData] = useState(null);
 
-            // --- SISTEM SINKRONISASI REAL-TIME (BYPASS STORAGE UNTUK ANTI-GAGAL) ---
+            // --- SISTEM SINKRONISASI REAL-TIME (BYPASS CACHE BROWSER) ---
             useEffect(() => {
-                let interval;
-                // Polling aktif saat di Ruang Siswa (termasuk ruang demo 3D) untuk menunggu siaran
-                if (currentView === 'player') {
-                    interval = setInterval(async () => {
-                        try {
-                            // Cek perintah siaran langsung dari Tabel Films, mengabaikan kebijakan Storage
-                            const res = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=url`, {
-                                headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-                            });
-                            if (res.ok) {
-                                const data = await res.json();
-                                if (data && data.length > 0) {
-                                    const parsedPayload = JSON.parse(data[0].url);
-                                    setBroadcastData(prev => {
-                                        // Update jika ada stempel waktu baru
-                                        if (!prev || parsedPayload.timestamp > prev.timestamp) {
-                                            return parsedPayload;
-                                        }
-                                        return prev;
-                                    });
-                                } else {
-                                    // Jika tidak ada data live, reset
-                                    setBroadcastData(null);
-                                }
+                // Polling diatur Global: Semua perangkat (Guru/Siswa) mendengarkan tanpa henti
+                const fetchLiveState = async () => {
+                    try {
+                        // Anti-Cache: Menggunakan Date.now() dan cache: 'no-store' agar HP selalu mengambil data terbaru
+                        const res = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=url&t=${Date.now()}`, {
+                            headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+                            cache: 'no-store' 
+                        });
+                        
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data && data.length > 0) {
+                                const parsedPayload = JSON.parse(data[0].url);
+                                setBroadcastData(prev => {
+                                    // Hanya update jika timestamp siaran lebih baru (mencegah kedipan)
+                                    if (!prev || parsedPayload.timestamp > prev.timestamp) {
+                                        return parsedPayload;
+                                    }
+                                    return prev;
+                                });
+                            } else {
+                                setBroadcastData(null);
                             }
-                        } catch (e) {
-                            // Abaikan error jaringan sesaat
                         }
-                    }, 2500); // Sinkronisasi setiap 2.5 detik
-                }
-                return () => clearInterval(interval);
-            }, [currentView]);
+                    } catch (e) {
+                        // Abaikan error jaringan sesaat, terus ulangi
+                    }
+                };
 
-            // Sinkronisasi Tab Lokal (Untuk Pratinjau Cepat)
+                // Polling berjalan setiap 2 detik secara stabil
+                const interval = setInterval(fetchLiveState, 2000);
+                return () => clearInterval(interval);
+            }, []);
+
+            // Sinkronisasi Tab Lokal (Untuk Pratinjau Cepat / Backup)
             useEffect(() => {
                 const handleStorageChange = (e) => {
                     if (e.key === 'cakra_broadcast' && e.newValue) {
@@ -191,31 +192,38 @@
             }, []);
 
             // FUNGSI GURU UNTUK MENYIARKAN KE SELURUH SISWA (Via Database Tabel)
-            const simulateBroadcastToStudent = (media) => {
+            const simulateBroadcastToStudent = async (media) => {
                 const payload = media ? { type: 'video', data: media, timestamp: Date.now() } : null;
                 
-                // 1. Update Layar Guru (Lokal)
+                // 1. Update Layar Guru (Lokal) Secara Instan
                 setBroadcastData(payload);
                 localStorage.setItem('cakra_broadcast', JSON.stringify(payload || {}));
                 window.dispatchEvent(new StorageEvent('storage', { key: 'cakra_broadcast', newValue: JSON.stringify(payload || {}) }));
 
-                // 2. Tembak Perintah ke Database Utama (Pasti Masuk)
-                if (payload) {
-                    const stateRecord = { title: 'GLOBAL_LIVE_STATE', format: 'SYSTEM_SYNC', is_video: false, url: JSON.stringify(payload) };
-                    // Hapus yang lama, masukkan yang baru (Simulasi Upsert yang aman)
-                    fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE`, {
-                        method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-                    }).then(() => {
-                        fetch(`${SUPABASE_URL}/rest/v1/films`, {
-                            method: 'POST', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-                            body: JSON.stringify(stateRecord)
-                        });
-                    }).catch(err => console.log("Gagal memancarkan siaran", err));
-                } else {
-                    // Hentikan Siaran
-                    fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE`, {
-                        method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-                    }).catch(e => {});
+                // 2. Tembak Perintah ke Database Utama (Upsert Aman & Cepat)
+                const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
+                
+                try {
+                    if (payload) {
+                        // Cek apakah rekaman GLOBAL_LIVE_STATE sudah ada
+                        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=id`, { headers, cache: 'no-store' });
+                        const checkData = await checkRes.json();
+                        
+                        const stateRecord = { title: 'GLOBAL_LIVE_STATE', format: 'SYSTEM_SYNC', is_video: false, url: JSON.stringify(payload) };
+                        
+                        if (checkData && checkData.length > 0) {
+                            // Update (PATCH) rekaman yang ada agar lebih cepat dari DELETE->POST
+                            await fetch(`${SUPABASE_URL}/rest/v1/films?id=eq.${checkData[0].id}`, { method: 'PATCH', headers, body: JSON.stringify(stateRecord) });
+                        } else {
+                            // Buat (POST) jika baru
+                            await fetch(`${SUPABASE_URL}/rest/v1/films`, { method: 'POST', headers, body: JSON.stringify(stateRecord) });
+                        }
+                    } else {
+                        // Hentikan Siaran (Hapus rekaman state)
+                        await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE`, { method: 'DELETE', headers });
+                    }
+                } catch (err) {
+                    console.log("Gagal memancarkan siaran", err);
                 }
             };
 
