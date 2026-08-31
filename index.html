@@ -93,8 +93,6 @@
         const IconTrash = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
         const IconVolumeUp = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>;
         const IconVolumeOff = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="1" x2="1" y2="23"></line></svg>;
-        const IconPlay = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
-        const IconFullscreen = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>;
         const IconEyeOpen = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>;
         const IconEyeClosed = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>;
         
@@ -125,14 +123,14 @@
             return res.status === 204 ? null : await res.json();
         };
 
-        // --- HELPER UNTUK OTOMATIS LANDSCAPE & FULLSCREEN ---
+        // Helper Auto-Landscape & Fullscreen
         const enterFullscreenAndLandscape = () => {
             const el = document.documentElement;
             const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
             if (rfs) {
                 rfs.call(el).then(() => {
                     if (window.screen && screen.orientation && screen.orientation.lock) {
-                        screen.orientation.lock('landscape').catch(e => console.log("Landscape lock diabaikan (mungkin desktop):", e));
+                        screen.orientation.lock('landscape').catch(e => console.log("Landscape lock diabaikan (mungkin desktop/iOS terbatas):", e));
                     }
                 }).catch(err => console.log("Fullscreen diblokir browser", err));
             }
@@ -144,15 +142,20 @@
             const [isMuted, setIsMuted] = useState(true);
             const [broadcastData, setBroadcastData] = useState(null);
 
-            // --- SISTEM SINKRONISASI REAL-TIME (BYPASS CACHE BROWSER) ---
+            // --- SISTEM SINKRONISASI REAL-TIME DIPERBAIKI (ANTI CROSS-DEVICE BUG) ---
             useEffect(() => {
-                // Polling diatur Global: Semua perangkat (Guru/Siswa) mendengarkan tanpa henti
                 const fetchLiveState = async () => {
                     try {
-                        // Anti-Cache: Menggunakan Date.now() dan cache: 'no-store' agar HP selalu mengambil data terbaru
-                        const res = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=url&t=${Date.now()}`, {
-                            headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-                            cache: 'no-store' 
+                        // BUG FIX: Menggunakan header Cache-Control absolut alih-alih parameter `&t=`
+                        // PostgREST Supabase akan menolak parameter `t` jika kolom tersebut tidak ada.
+                        const res = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=url`, {
+                            headers: { 
+                                'apikey': SUPABASE_KEY, 
+                                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
+                            }
                         });
                         
                         if (res.ok) {
@@ -160,7 +163,7 @@
                             if (data && data.length > 0) {
                                 const parsedPayload = JSON.parse(data[0].url);
                                 setBroadcastData(prev => {
-                                    // Hanya update jika timestamp siaran lebih baru (mencegah kedipan)
+                                    // Update jika broadcast baru atau timestamp lebih baru
                                     if (!prev || parsedPayload.timestamp > prev.timestamp) {
                                         return parsedPayload;
                                     }
@@ -171,55 +174,41 @@
                             }
                         }
                     } catch (e) {
-                        // Abaikan error jaringan sesaat, terus ulangi
+                        // Abaikan error jaringan agar tidak membanjiri konsol
                     }
                 };
 
-                // Polling berjalan setiap 2 detik secara stabil
+                // Polling setiap 2 detik secara konsisten di semua perangkat
                 const interval = setInterval(fetchLiveState, 2000);
                 return () => clearInterval(interval);
             }, []);
 
-            // Sinkronisasi Tab Lokal (Untuk Pratinjau Cepat / Backup)
-            useEffect(() => {
-                const handleStorageChange = (e) => {
-                    if (e.key === 'cakra_broadcast' && e.newValue) {
-                        setBroadcastData(JSON.parse(e.newValue));
-                    }
-                };
-                window.addEventListener('storage', handleStorageChange);
-                return () => window.removeEventListener('storage', handleStorageChange);
-            }, []);
-
-            // FUNGSI GURU UNTUK MENYIARKAN KE SELURUH SISWA (Via Database Tabel)
             const simulateBroadcastToStudent = async (media) => {
                 const payload = media ? { type: 'video', data: media, timestamp: Date.now() } : null;
                 
-                // 1. Update Layar Guru (Lokal) Secara Instan
+                // Update Local UI Instan
                 setBroadcastData(payload);
-                localStorage.setItem('cakra_broadcast', JSON.stringify(payload || {}));
-                window.dispatchEvent(new StorageEvent('storage', { key: 'cakra_broadcast', newValue: JSON.stringify(payload || {}) }));
 
-                // 2. Tembak Perintah ke Database Utama (Upsert Aman & Cepat)
-                const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
+                // Tembak Perintah ke Database Utama agar Semua Perangkat Lain Sinkron
+                const headers = { 
+                    'apikey': SUPABASE_KEY, 
+                    'Authorization': `Bearer ${SUPABASE_KEY}`, 
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                };
                 
                 try {
                     if (payload) {
-                        // Cek apakah rekaman GLOBAL_LIVE_STATE sudah ada
-                        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=id`, { headers, cache: 'no-store' });
+                        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE&select=id`, { headers });
                         const checkData = await checkRes.json();
-                        
                         const stateRecord = { title: 'GLOBAL_LIVE_STATE', format: 'SYSTEM_SYNC', is_video: false, url: JSON.stringify(payload) };
                         
                         if (checkData && checkData.length > 0) {
-                            // Update (PATCH) rekaman yang ada agar lebih cepat dari DELETE->POST
                             await fetch(`${SUPABASE_URL}/rest/v1/films?id=eq.${checkData[0].id}`, { method: 'PATCH', headers, body: JSON.stringify(stateRecord) });
                         } else {
-                            // Buat (POST) jika baru
                             await fetch(`${SUPABASE_URL}/rest/v1/films`, { method: 'POST', headers, body: JSON.stringify(stateRecord) });
                         }
                     } else {
-                        // Hentikan Siaran (Hapus rekaman state)
                         await fetch(`${SUPABASE_URL}/rest/v1/films?title=eq.GLOBAL_LIVE_STATE`, { method: 'DELETE', headers });
                     }
                 } catch (err) {
@@ -230,7 +219,7 @@
             return (
                 <div className="w-full h-screen text-white font-sans overflow-hidden selection:bg-cyan-500/30 bg-[#020617]">
                     {currentView === 'landing' && <LandingScreen onEnterStudent={() => { 
-                        enterFullscreenAndLandscape(); // Auto-Landscape
+                        enterFullscreenAndLandscape(); // Auto-Landscape & Fullscreen
                         setVrMode(true); 
                         setCurrentView('player'); 
                     }} onEnterTeacher={() => setCurrentView('teacher_auth')} />}
@@ -285,7 +274,7 @@
             );
         }
 
-        // --- TEACHER AUTH (Dengan Toggle Mata Sandi) ---
+        // --- TEACHER AUTH (Sandi Terlihat/Tersembunyi) ---
         function TeacherAuth({ onAuthenticated, onCancel }) {
             const [password, setPassword] = useState('');
             const [showPassword, setShowPassword] = useState(false);
@@ -337,7 +326,6 @@
 
             const fetchMedia = async () => {
                 try {
-                    // Sembunyikan baris state sistem agar tidak mengotori perpustakaan
                     const data = await supabaseApi('/films?title=neq.GLOBAL_LIVE_STATE&select=*&order=id.desc');
                     if (data) setMediaList(data);
                 } catch (err) { console.warn("Koneksi Supabase gagal."); }
@@ -376,7 +364,7 @@
             };
 
             const handlePreview = (media) => {
-                enterFullscreenAndLandscape();
+                enterFullscreenAndLandscape(); // Beralih otomatis untuk Guru
                 setPreviewMedia(media);
             };
 
@@ -397,7 +385,7 @@
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 border-b border-white/10 pb-6">
                                 <div>
                                     <h3 className="text-3xl font-bold text-white mb-1">Pustaka Media</h3>
-                                    <p className="text-slate-400 text-sm font-medium">Klik "Siarkan" untuk memutar sinkron di semua HP siswa.</p>
+                                    <p className="text-slate-400 text-sm font-medium">Klik "Siarkan" untuk memutar otomatis di layar semua siswa.</p>
                                 </div>
                                 <div className="flex gap-3">
                                     <button onClick={fetchMedia} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-semibold">🔄 Refresh</button>
@@ -448,7 +436,7 @@
                         </div>
                     </div>
 
-                    {/* MODAL PRATINJAU GURU YANG TERISOLASI */}
+                    {/* MODAL PRATINJAU GURU (Menggunakan Player Utama tanpa Tombol Tutup) */}
                     {previewMedia && (
                         <div className="fixed inset-0 z-50 bg-black flex flex-col">
                             <div className="flex-1 relative">
@@ -561,7 +549,7 @@
             );
         }
 
-        // --- 2. RUANG DEMO EKOSISTEM 360 (Diperbaiki Teks & Kedalaman Ruang) ---
+        // --- 2. RUANG DEMO EKOSISTEM 360 (DIROBAK MENJADI SIANG HARI, RUMPUT & AWAN) ---
         function Ecosystem3DRoom({ vrMode, setVrMode, isMuted, setIsMuted, onExit }) {
             const containerRef = useRef(null);
 
@@ -571,8 +559,9 @@
                 const container = containerRef.current;
                 
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x021008);
-                scene.fog = new THREE.FogExp2(0x021008, 0.02);
+                // 1. LANGIT BIRU (Sky Blue)
+                scene.background = new THREE.Color(0x87CEEB);
+                scene.fog = new THREE.FogExp2(0x87CEEB, 0.003); // Kabut tipis menyatu dengan langit
 
                 const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -585,26 +574,60 @@
                     stereoEffect.setSize(container.clientWidth, container.clientHeight);
                 }
 
-                // Grid Bawah untuk Kedalaman Spasial (Penting agar tidak terlihat hijau blank)
-                const gridHelper = new THREE.GridHelper(300, 60, 0x10b981, 0x064e3b);
-                gridHelper.position.y = -15;
-                scene.add(gridHelper);
+                // --- MEMBANGUN EKOSISTEM SIANG HARI ---
+                
+                // 2. TANAH & RUMPUT (Box Geometry untuk menampilkan sisi kedalaman tanah)
+                const groundGeo = new THREE.BoxGeometry(500, 20, 500); // Daratan yang luas dan tebal
+                const groundMaterials = [
+                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), // Sisi Coklat (Tanah)
+                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), 
+                    new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.8 }), // Atas Hijau (Rumput)
+                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), 
+                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 }), 
+                    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 })  
+                ];
+                const ground = new THREE.Mesh(groundGeo, groundMaterials);
+                ground.position.y = -20; // Posisikan di bawah kaki pengguna
+                scene.add(ground);
 
-                // Starfield (Agar putaran 360 terasa)
-                const starGeo = new THREE.BufferGeometry();
-                const starVerts = [];
-                for(let i=0; i<1500; i++) starVerts.push((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*300);
-                starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
-                const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0x34d399, size: 0.8, transparent: true, opacity: 0.6}));
-                scene.add(stars);
+                // Tambahkan Ratusan Bilah Rumput (Cones kecil)
+                const grassGeo = new THREE.ConeGeometry(0.5, 3, 3);
+                const grassMat = new THREE.MeshStandardMaterial({ color: 0x16a34a });
+                for(let i=0; i<300; i++) {
+                    const grass = new THREE.Mesh(grassGeo, grassMat);
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 10 + Math.random() * 150; // Jangan taruh rumput tepat di muka kamera
+                    grass.position.set(Math.cos(angle)*radius, -10, Math.sin(angle)*radius);
+                    grass.rotation.x = (Math.random() - 0.5) * 0.4;
+                    grass.rotation.z = (Math.random() - 0.5) * 0.4;
+                    scene.add(grass);
+                }
 
-                // Ikon Ekosistem (Tersebar 360 Derajat Penuh, Bukan Ngumpul di Satu Titik)
+                // 3. AWAN (Kumpulan Bola Volumetrik)
+                const cloudGroup = new THREE.Group();
+                const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, transparent: true, opacity: 0.95 });
+                for(let i=0; i<20; i++) {
+                    const cloud = new THREE.Group();
+                    const numPuffs = 3 + Math.floor(Math.random() * 4); // 3-6 kepulan per awan
+                    for(let j=0; j<numPuffs; j++) {
+                        const puff = new THREE.Mesh(new THREE.SphereGeometry(10 + Math.random()*15, 8, 8), cloudMat);
+                        puff.position.set((Math.random()-0.5)*20, (Math.random()-0.5)*10, (Math.random()-0.5)*20);
+                        cloud.add(puff);
+                    }
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 80 + Math.random() * 150; // Awan berada jauh di langit
+                    cloud.position.set(Math.cos(angle)*radius, 50 + Math.random()*50, Math.sin(angle)*radius);
+                    cloudGroup.add(cloud);
+                }
+                scene.add(cloudGroup);
+
+                // 4. IKON EKOSISTEM (Disebar melingkar 360)
                 const createIconSprite = (emoji, size) => {
                     const canvas = document.createElement('canvas');
                     canvas.width = 256; canvas.height = 256;
                     const ctx = canvas.getContext('2d');
                     ctx.font = '120px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                    ctx.shadowColor = '#10b981'; ctx.shadowBlur = 20; 
+                    ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 10; 
                     ctx.fillText(emoji, 128, 128);
                     
                     const tex = new THREE.CanvasTexture(canvas);
@@ -616,45 +639,49 @@
 
                 const icons = ['🦊', '🦅', '🐛', '🌳', '🌍', '☀️', '💧', '☁️'];
                 const iconSprites = [];
-                for(let i=0; i<60; i++) {
+                for(let i=0; i<40; i++) {
                     const icon = icons[Math.floor(Math.random() * icons.length)];
                     const sprite = createIconSprite(icon, 15);
                     const angle = Math.random() * Math.PI * 2;
-                    const radius = 40 + Math.random() * 60; 
+                    const radius = 30 + Math.random() * 70; 
                     const x = Math.cos(angle) * radius;
                     const z = Math.sin(angle) * radius;
-                    const yPos = (icon === '🦅' || icon === '☀️' || icon === '☁️') ? 15 + Math.random()*20 : (icon === '🐛' || icon === '🌳') ? -10 : 5;
+                    const yPos = (icon === '🦅' || icon === '☀️' || icon === '☁️') ? 15 + Math.random()*20 : (icon === '🐛' || icon === '🌳') ? -5 : 5;
                     
                     sprite.position.set(x, yPos, z);
                     scene.add(sprite);
                     iconSprites.push(sprite);
                 }
 
-                // Teks 3D Resolusi Aman (2048x512) - Menghindari Crash di HP
+                // 5. TEKS 3D (Diposisikan di -Z / Depan Awal)
                 const textCanvas = document.createElement('canvas');
-                textCanvas.width = 2048; 
+                textCanvas.width = 2048; // Resolusi diturunkan agar GPU HP kuat
                 textCanvas.height = 512;
                 const ctx = textCanvas.getContext('2d');
                 ctx.fillStyle = 'rgba(0,0,0,0)'; ctx.fillRect(0,0,2048,512);
                 ctx.textAlign = 'center';
                 
-                ctx.font = 'bold 60px "Inter", sans-serif'; ctx.fillStyle = '#6ee7b7';
+                ctx.font = 'bold 70px "Inter", sans-serif'; ctx.fillStyle = '#0f172a'; // Teks Gelap agar kontras dengan langit
                 ctx.fillText('Selamat Datang, di ruang Virtual,', 1024, 200);
                 
-                ctx.font = '900 110px "Inter", sans-serif'; ctx.fillStyle = '#ffffff';
-                ctx.shadowColor = '#10b981'; ctx.shadowBlur = 30;
+                ctx.font = '900 120px "Inter", sans-serif'; ctx.fillStyle = '#1e293b';
+                ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 10;
                 ctx.fillText('CAKRA-SAINS', 1024, 320);
 
                 const textTex = new THREE.CanvasTexture(textCanvas);
                 textTex.needsUpdate = true;
                 const textSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex, transparent: true }));
                 textSprite.scale.set(160, 40, 1); 
-                textSprite.position.set(0, 10, -60); // Terkunci di depan (-Z)
+                textSprite.position.set(0, 15, -60); 
                 scene.add(textSprite);
 
-                scene.add(new THREE.AmbientLight(0xffffff, 1));
+                // Pencahayaan Siang Hari
+                scene.add(new THREE.AmbientLight(0xffffff, 0.8)); // Cahaya merata
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); // Matahari
+                dirLight.position.set(100, 200, 50);
+                scene.add(dirLight);
 
-                // Kontrol Orientasi Kamera Paten
+                // --- SISTEM KONTROL KAMERA ---
                 let lon = -90, lat = 0; // Mulai menghadap teks
                 let isDragging = false;
                 let prev = { x:0, y:0 };
@@ -671,6 +698,7 @@
                 container.addEventListener('touchstart', onDown, {passive:false}); window.addEventListener('touchmove', onMove, {passive:false}); window.addEventListener('touchend', onUp);
 
                 let controls = null;
+                // Aktifkan Gyro otomatis karena siswa sudah mengklik tombol di halaman sebelumnya
                 if (THREE.DeviceOrientationControls) {
                     controls = new THREE.DeviceOrientationControls(camera);
                 }
@@ -681,7 +709,10 @@
                     
                     const time = Date.now() * 0.001;
                     iconSprites.forEach((sprite, i) => { sprite.position.y += Math.sin(time + i) * 0.02; });
-                    textSprite.position.y = 10 + Math.sin(time * 2) * 1.5;
+                    textSprite.position.y = 15 + Math.sin(time * 2) * 1.5;
+                    
+                    // Awan bergeser pelan
+                    cloudGroup.rotation.y += 0.0005;
 
                     if (controls && controls.deviceOrientation && controls.deviceOrientation.alpha !== null) {
                         controls.update(); 
@@ -726,7 +757,7 @@
                     
                     <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                         <div className="bg-black/50 text-white px-6 py-2 rounded-full border border-white/10 text-xs md:text-sm font-bold animate-pulse backdrop-blur whitespace-nowrap">
-                            Menunggu Siaran Film dari Guru... (Geser Layar / Putar HP)
+                            Menunggu Siaran Film dari Guru... (Putar HP Anda)
                         </div>
                     </div>
 
@@ -737,7 +768,7 @@
 
         // --- KOMPONEN TOMBOL BAWAH ---
         function ControlsOverlay({ onExit, vrMode, setVrMode, isMuted, setIsMuted }) {
-            // Menambahkan dukungan Fullscreen toggle manual jika diperlukan
+            // Menambahkan dukungan Fullscreen toggle manual
             const [isFullscreen, setIsFullscreen] = useState(false);
             
             useEffect(() => {
@@ -767,7 +798,6 @@
                         <button onClick={() => setVrMode(!vrMode)} className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border ${vrMode ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-black/50 border-white/20 text-slate-300 hover:bg-white/10'}`}>
                             <IconVR />
                         </button>
-                        {/* Tombol Ekstra Layar Penuh Sesuai Perintah */}
                         <button onClick={toggleFullscreen} className="w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center backdrop-blur transition-all shadow-lg border bg-black/50 border-white/20 text-slate-300 hover:bg-white/10">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
                         </button>
